@@ -14,6 +14,7 @@ pub fn run() {
         )?;
       }
 
+      // запуск Flask-бэкенда как sidecar-процесс
       let sidecar_command = app.shell().sidecar("run")
         .expect("failed to create sidecar command");
 
@@ -21,6 +22,7 @@ pub fn run() {
         .spawn()
         .expect("failed to spawn sidecar");
 
+      // слушаем вывод процесса (для отладки - видно в консоли что Flask пишет)
       tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
           if let CommandEvent::Stdout(line) = event {

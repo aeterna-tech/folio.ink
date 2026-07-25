@@ -18,7 +18,7 @@ jobs:
             target: 'x86_64-pc-windows-msvc'
             ext: '.exe'
           - platform: 'macos-latest'
-            target: 'x86_64-apple-darwin'
+            target: 'aarch64-apple-darwin'
             ext: ''
           - platform: 'ubuntu-latest'
             target: 'x86_64-unknown-linux-gnu'

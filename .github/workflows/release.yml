@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -15,7 +18,7 @@ jobs:
             target: 'x86_64-pc-windows-msvc'
             ext: '.exe'
           - platform: 'macos-latest'
-            target: 'x86_64-apple-darwin'
+            target: 'aarch64-apple-darwin'
             ext: ''
           - platform: 'ubuntu-latest'
             target: 'x86_64-unknown-linux-gnu'
@@ -60,9 +63,10 @@ jobs:
 
       - name: Переименование sidecar под платформу (Windows)
         if: matrix.platform == 'windows-latest'
+        shell: pwsh
         run: |
-          mkdir -p src-tauri/binaries
-          mv backend/dist/run.exe src-tauri/binaries/run-${{ matrix.target }}${{ matrix.ext }}
+          New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
+          Move-Item -Force backend/dist/run.exe src-tauri/binaries/run-${{ matrix.target }}${{ matrix.ext }}
 
       - name: Переименование sidecar под платформу (Unix)
         if: matrix.platform != 'windows-latest'

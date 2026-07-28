@@ -3,7 +3,6 @@ from app.models.project import Project
 from app.models.entry import Entry
 from datetime import date
 from app.models.tag import Tag
-from app.database import db
 
 
 def _create_project(app, name="Тестовый проект"):

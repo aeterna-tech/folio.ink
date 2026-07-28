@@ -1,19 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import db
 from app.models.tag import entry_tags
 
 
 class Entry(db.Model):
-    """
-    Модель записи — таблица 'entry' в SQLite.
-    Каждая запись = одно "что сделал сегодня" внутри конкретного проекта.
-    """
 
     id = db.Column(db.Integer, primary_key=True)
 
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
 
-    date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    date = db.Column(db.Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
 
     duration_min = db.Column(db.Integer, nullable=False)
 

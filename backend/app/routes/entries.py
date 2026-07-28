@@ -9,10 +9,7 @@ entries_bp = Blueprint('entries', __name__)
 
 
 def _parse_date(date_str):
-    """
-    Превращает строку 'YYYY-MM-DD' в объект date.
-    Возвращает None, если строка невалидна.
-    """
+
     try:
         return datetime.strptime(date_str, '%Y-%m-%d').date()
     except (ValueError, TypeError):
@@ -20,11 +17,7 @@ def _parse_date(date_str):
 
 
 def _resolve_tags(tag_names):
-    """
-    Принимает список строк ['bugfix', 'api'] и возвращает список
-    объектов Tag — существующие берёт из базы, новые создаёт.
-    Пустые строки и дубликаты игнорируются.
-    """
+
     tags = []
     seen = set()
 
@@ -49,7 +42,7 @@ def get_entries(project_id):
     """
     Список записей внутри конкретного проекта, свежие сверху.
     """
-    project = Project.query.get(project_id)
+    project = db.session.get(Project, project_id)
     if project is None:
         return jsonify({"error": "Проект не найден"}), 404
 
@@ -64,13 +57,8 @@ def get_entries(project_id):
 
 @entries_bp.route('/api/projects/<int:project_id>/entries', methods=['POST'])
 def create_entry(project_id):
-    """
-    Создаёт запись внутри проекта.
-    Ожидает JSON: { "date": "2026-07-10", "duration_min": 90, "content": "...", "tags": ["bugfix"] }
-    'date' необязателен — если не передан, берётся сегодняшний день (UTC).
-    'tags' необязателен — если не передан, запись создаётся без тегов.
-    """
-    project = Project.query.get(project_id)
+
+    project = db.session.get(Project, project_id)
     if project is None:
         return jsonify({"error": "Проект не найден"}), 404
 
@@ -112,7 +100,7 @@ def create_entry(project_id):
 
 @entries_bp.route('/api/entries/<int:entry_id>', methods=['GET'])
 def get_entry(entry_id):
-    entry = Entry.query.get(entry_id)
+    entry = db.session.get(Entry, entry_id)
     if entry is None:
         return jsonify({"error": "Запись не найдена"}), 404
     return jsonify(entry.to_dict())
@@ -120,12 +108,8 @@ def get_entry(entry_id):
 
 @entries_bp.route('/api/entries/<int:entry_id>', methods=['PUT'])
 def update_entry(entry_id):
-    """
-    Обновляет запись. Принимает любое подмножество полей:
-    { "date": "...", "duration_min": ..., "content": "...", "tags": [...] }
-    Поля, которых нет в теле запроса, не трогаются.
-    """
-    entry = Entry.query.get(entry_id)
+
+    entry = db.session.get(Entry, entry_id)
     if entry is None:
         return jsonify({"error": "Запись не найдена"}), 404
 
@@ -158,7 +142,7 @@ def update_entry(entry_id):
 
 @entries_bp.route('/api/entries/<int:entry_id>', methods=['DELETE'])
 def delete_entry(entry_id):
-    entry = Entry.query.get(entry_id)
+    entry = db.session.get(Entry, entry_id)
     if entry is None:
         return jsonify({"error": "Запись не найдена"}), 404
 

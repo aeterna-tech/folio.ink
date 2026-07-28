@@ -3,27 +3,20 @@ from app.models.entry import Entry
 from app.database import db
 from app.models.project import Project
 
-# Blueprint — способ Flask группировать роуты по темам.
-# Все роуты про проекты будут жить в этом файле, а не размазаны по app.py
+
 projects_bp = Blueprint('projects', __name__)
 
 
 @projects_bp.route('/api/projects', methods=['GET'])
 def get_projects():
-    """
-    Отдаёт список всех проектов в формате JSON.
-    Именно этот адрес будет дёргать фронт Жоры вместо моков.
-    """
+
     all_projects = Project.query.all()
     return jsonify([p.to_dict() for p in all_projects])
 
 
 @projects_bp.route('/api/projects', methods=['POST'])
 def create_project():
-    """
-    Создаёт новый проект. Ожидает JSON в теле запроса:
-    { "name": "...", "color": "...", "description": "..." }
-    """
+
     data = request.json
 
     if not data or not data.get('name'):
@@ -43,11 +36,8 @@ def create_project():
 
 @projects_bp.route('/api/projects/<int:project_id>', methods=['PUT'])
 def update_project(project_id):
-    """
-    Обновляет проект. Принимает любое подмножество полей:
-    { "name": "...", "color": "...", "description": "..." }
-    """
-    project = Project.query.get(project_id)
+
+    project = db.session.get(Project, project_id)
     if project is None:
         return jsonify({"error": "Проект не найден"}), 404
 
@@ -70,10 +60,8 @@ def update_project(project_id):
 
 @projects_bp.route('/api/projects/<int:project_id>', methods=['DELETE'])
 def delete_project(project_id):
-    """
-    Удаляет проект вместе со всеми его записями (каскадно).
-    """
-    project = Project.query.get(project_id)
+
+    project = db.session.get(Project, project_id)
     if project is None:
         return jsonify({"error": "Проект не найден"}), 404
 

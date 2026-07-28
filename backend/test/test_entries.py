@@ -3,6 +3,7 @@ from app.models.project import Project
 from app.models.entry import Entry
 from datetime import date
 from app.models.tag import Tag
+from app.database import db
 
 
 def _create_project(app, name="Тестовый проект"):
@@ -197,7 +198,7 @@ class TestDeleteEntry:
         assert response.status_code == 204
 
         with app.app_context():
-            assert Entry.query.get(entry_id) is None
+            assert db.session.get(Entry, entry_id) is None
 
 
 class TestEntryTags:

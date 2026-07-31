@@ -197,7 +197,7 @@ class TestDeleteEntry:
         assert response.status_code == 204
 
         with app.app_context():
-            assert Entry.query.get(entry_id) is None
+            assert db.session.get(Entry, entry_id) is None
 
 
 class TestEntryTags:

@@ -186,7 +186,7 @@ class TestDeleteProject:
         assert response.status_code == 204
 
         with app.app_context():
-            assert Project.query.get(project_id) is None
+            assert db.session.get(Project, project_id) is None
 
     def test_delete_cascades_to_entries(self, client, app):
         from app.database import db

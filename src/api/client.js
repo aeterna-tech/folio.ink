@@ -1,32 +1,23 @@
 const BASE_URL = 'http://localhost:5000' // Адрес, где запущен Python-бэкенд
 
 // ---------------------------------------------------------------------------
-// СТАТУС ЭНДПОИНТОВ (на конец спринта, по routes/projects.py и entry.py):
+// СТАТУС ЭНДПОИНТОВ (по routes/projects.py, routes/entries.py, routes/tags.py):
 //
-//   ✅ GET    /api/projects            — есть
-//   ✅ POST   /api/projects            — есть
-//   ❌ PUT    /api/projects/<id>       — НЕТ на бэке, нужно добавить в projects.py
-//   ❌ DELETE /api/projects/<id>       — НЕТ на бэке, нужно добавить в projects.py
-//   ❌ GET    /api/projects/<id>/entries — НЕТ. routes/entries.py вообще не создан
-//   ❌ POST   /api/entries             — НЕТ
-//   ❌ PUT    /api/entries/<id>        — НЕТ
-//   ❌ DELETE /api/entries/<id>        — НЕТ
+//   ✅ GET    /api/projects                    — есть
+//   ✅ POST   /api/projects                    — есть
+//   ✅ PUT    /api/projects/<id>               — есть
+//   ✅ DELETE /api/projects/<id>               — есть (каскадно удаляет entries)
+//   ✅ GET    /api/projects/<id>/entries        — есть
+//   ✅ POST   /api/projects/<id>/entries        — есть (project_id только в пути, не в теле)
+//   ✅ GET    /api/entries/<id>                 — есть
+//   ✅ PUT    /api/entries/<id>                 — есть
+//   ✅ DELETE /api/entries/<id>                 — есть
+//   ✅ GET    /api/projects/<id>/tags           — есть (tags.py)
 //
-// Функции ниже для отсутствующих роутов написаны в расчёте на то, что
-// бэкенд будет реализован по аналогии с /api/projects (тот же стиль,
-// тот же формат ошибок). Пока роута нет — fetch вернёт 404, и функция
-// бросит понятную ошибку с адресом, чего не хватает, вместо тихого сбоя
-// где-то в глубине компонента.
+// Entry.to_dict() отдаёт tags как список строк ([tag.name for tag in self.tags]) —
+// формат совпадает с тем, что ждёт фронт, маппинга не нужно. Tag.to_dict()
+// в tags.py отдаёт {id, name} — там маппинг на имя всё же нужен (см. getProjectTags).
 // ---------------------------------------------------------------------------
-
-/**
- * Модель Entry на бэкенде НЕ имеет поля tags (см. app/models/entry.py).
- * Фронт (LogEditor.jsx) использует entry.tags. Пока бэкенд не добавит
- * колонку, теги при сохранении/чтении с сервера теряются — normalizeEntry
- * подставляет пустой массив, а denormalizeEntry просто отбрасывает tags,
- * чтобы это было явно видно, а не терялось незаметно.
- */
-const ENTRY_TAGS_SUPPORTED_ON_BACKEND = false
 
 async function request(path, options = {}) {
 	let response
@@ -85,8 +76,7 @@ export const createProject = async ({ name, color, description }) => {
 	})
 }
 
-// ⚠️ Не реализовано на бэкенде — нужно добавить
-// @projects_bp.route('/api/projects/<int:project_id>', methods=['PUT'])
+// PUT /api/projects/<id>
 export const updateProject = async (
 	projectId,
 	{ name, color, description },
@@ -97,8 +87,7 @@ export const updateProject = async (
 	})
 }
 
-// ⚠️ Не реализовано на бэкенде — нужно добавить
-// @projects_bp.route('/api/projects/<int:project_id>', methods=['DELETE'])
+// DELETE /api/projects/<id> — каскадно удаляет и все entries проекта
 export const deleteProject = async projectId => {
 	return request(`/api/projects/${projectId}`, { method: 'DELETE' })
 }
@@ -114,46 +103,45 @@ function normalizeEntry(raw) {
 		date: raw.date,
 		durationMinutes: raw.duration_min,
 		text: raw.content ?? '',
-		// поля tags на бэкенде нет — отдаём пустой массив, а не undefined,
-		// чтобы entry.tags?.map(...) на фронте не падал
-		tags: [],
+		// Entry.to_dict() отдаёт tags как список строк — маппинг не нужен,
+		// только страховка на случай null/undefined.
+		tags: raw.tags ?? [],
 	}
 }
 
 function denormalizeEntry(entry) {
-	const payload = {
+	return {
 		project_id: entry.projectId,
 		date: entry.date,
 		duration_min: entry.durationMinutes,
 		content: entry.text,
+		// _resolve_tags на бэке ждёт список строк с именами тегов и сам
+		// делает get-or-create по Tag.name — здесь просто прокидываем как есть.
+		tags: entry.tags ?? [],
 	}
-	if (!ENTRY_TAGS_SUPPORTED_ON_BACKEND && entry.tags?.length) {
-		console.warn(
-			'[client.js] entry.tags указаны, но бэкенд их не хранит (нет колонки в модели Entry) — теги будут потеряны при сохранении на сервер.',
-		)
-	}
-	return payload
 }
 
-// ⚠️ Не реализовано на бэкенде — нужен routes/entries.py, например:
-// @entries_bp.route('/api/projects/<int:project_id>/entries', methods=['GET'])
+// GET /api/projects/<id>/entries
 export const getEntries = async projectId => {
 	const raw = await request(`/api/projects/${projectId}/entries`)
 	return raw.map(normalizeEntry)
 }
 
-// ⚠️ Не реализовано на бэкенде — нужен
-// @entries_bp.route('/api/entries', methods=['POST'])
+// POST /api/projects/<id>/entries
+// ВАЖНО: project_id передаётся в URL, а не в теле — маршрут именно такой
+// в entries.py (create_entry(project_id) читает его из пути). Раньше тут
+// был POST на плоский /api/entries, которого на бэке нет вообще — все
+// сохранения падали бы 404.
 export const createEntry = async entry => {
-	const raw = await request('/api/entries', {
+	const { project_id, ...body } = denormalizeEntry(entry)
+	const raw = await request(`/api/projects/${project_id}/entries`, {
 		method: 'POST',
-		body: JSON.stringify(denormalizeEntry(entry)),
+		body: JSON.stringify(body),
 	})
 	return normalizeEntry(raw)
 }
 
-// ⚠️ Не реализовано на бэкенде — нужен
-// @entries_bp.route('/api/entries/<int:entry_id>', methods=['PUT'])
+// PUT /api/entries/<id>
 export const updateEntry = async (entryId, entry) => {
 	const raw = await request(`/api/entries/${entryId}`, {
 		method: 'PUT',
@@ -162,8 +150,16 @@ export const updateEntry = async (entryId, entry) => {
 	return normalizeEntry(raw)
 }
 
-// ⚠️ Не реализовано на бэкенде — нужен
-// @entries_bp.route('/api/entries/<int:entry_id>', methods=['DELETE'])
+// DELETE /api/entries/<id>
 export const deleteEntry = async entryId => {
 	return request(`/api/entries/${entryId}`, { method: 'DELETE' })
+}
+
+// --- Теги --------------------------------------------------------------
+// GET /api/projects/<id>/tags
+// Tag.to_dict() отдаёт {id, name} — TagPicker в LogEditor.jsx ждёт
+// плоский string[], поэтому маппим на .name здесь, на границе.
+export const getProjectTags = async projectId => {
+	const raw = await request(`/api/projects/${projectId}/tags`)
+	return raw.map(tag => tag.name)
 }

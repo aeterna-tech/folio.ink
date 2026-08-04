@@ -11,19 +11,27 @@ import LogEditor from '../components/LogEditor'
  * тонкая обвязка на уровне роутинга:
  *   1. достаёт :id из URL (useParams),
  *   2. резолвит активный проект и его записи из данных, которые лежат
- *      выше по дереву (App.jsx — единый источник правды на localStorage/API),
+ *      выше по дереву (App.jsx — источник правды: entries всегда с
+ *      бэкенда через getEntries/createEntry/updateEntry/deleteEntry,
+ *      projects — с бэкенда, с localStorage только как офлайн-фолбэк),
  *   3. обрабатывает случаи "проект не найден" / "id битый".
  *
- * id из URL — всегда строка, а project.id может быть числом (бэкенд,
- * autoincrement) или строкой (mock/localStorage-фикстуры) — поэтому
- * сравнение идёт через String(...), а не строгое ===.
+ * id из URL — всегда строка, а project.id может быть числом (обычный
+ * случай — бэкенд, autoincrement) или строкой (mock-фолбэк для projects,
+ * когда бэкенд недоступен) — поэтому сравнение идёт через String(...),
+ * а не строгое ===.
  */
 export default function ProjectNotes({
 	projects,
 	entries,
+	entriesLoading,
+	entriesError,
+	onRetryEntries,
+	isSavingEntry,
 	onSaveEntry,
 	onUpdateEntry,
 	onDeleteEntry,
+	projectTags,
 }) {
 	const { id } = useParams()
 	const navigate = useNavigate()
@@ -34,13 +42,9 @@ export default function ProjectNotes({
 		[projects, id],
 	)
 
-	// Имитация "получения логов для активного проекта": в реальном виде
-	// это будет GET /api/projects/:id/entries (см. getEntries в api/client.js,
-	// пока не реализован на бэке), а сейчас — локальная фильтрация общего
-	// списка entries, который App.jsx хранит в localStorage/state. Как только
-	// onSaveEntry/onUpdateEntry/onDeleteEntry обновляют entries в App.jsx,
-	// этот useMemo пересчитывается и список ниже обновляется сам собой —
-	// без ручного рефетча.
+	// entries сейчас подтягиваются через getEntries(id) в App.jsx (см.
+	// loadEntriesForActiveProject) при каждом заходе на этот маршрут —
+	// здесь просто фильтруем уже загруженный общий список по id проекта.
 	const projectEntries = useMemo(
 		() => entries.filter(e => String(e.projectId) === String(id)),
 		[entries, id],
@@ -62,12 +66,40 @@ export default function ProjectNotes({
 	}
 
 	return (
-		<LogEditor
-			activeProject={activeProject}
-			projectEntries={projectEntries}
-			onSaveEntry={onSaveEntry}
-			onUpdateEntry={onUpdateEntry}
-			onDeleteEntry={onDeleteEntry}
-		/>
+		<div className='h-screen flex flex-col'>
+			{entriesError && (
+				<div className='shrink-0 flex items-center justify-between gap-3 border-b border-red-900/50 bg-red-950/20 px-8 py-2.5'>
+					<p className='text-xs text-red-400'>
+						{t('logsScreen.loadError')}
+						<span className='block text-[11px] text-red-500/70 mt-0.5'>
+							{entriesError}
+						</span>
+					</p>
+					<button
+						type='button'
+						onClick={onRetryEntries}
+						className='shrink-0 px-3 py-1.5 rounded-md border border-red-900/60 text-red-300 text-xs font-semibold hover:bg-red-900/30 transition-colors'
+					>
+						{t('projectsScreen.retry')}
+					</button>
+				</div>
+			)}
+
+			{entriesLoading ? (
+				<div className='flex-1 flex items-center justify-center'>
+					<p className='text-sm text-slate-500'>{t('logsScreen.loading')}</p>
+				</div>
+			) : (
+				<LogEditor
+					activeProject={activeProject}
+					projectEntries={projectEntries}
+					isSaving={isSavingEntry}
+					onSaveEntry={onSaveEntry}
+					onUpdateEntry={onUpdateEntry}
+					onDeleteEntry={onDeleteEntry}
+					existingTags={projectTags}
+				/>
+			)}
+		</div>
 	)
 }

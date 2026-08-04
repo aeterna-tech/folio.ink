@@ -44,10 +44,13 @@ const resources = {
 				tracked_other: '{{count}} projects tracked',
 				loading: 'Loading projects…',
 				loadError: "Couldn't reach the backend — showing cached data.",
+				deleteError: "Couldn't delete the project on the server.",
 				retry: 'Retry',
 			},
 			logsScreen: {
 				selectFirst: 'Select a project from the Projects screen first.',
+				loading: 'Loading entries…',
+				loadError: "Couldn't reach the backend — showing cached entries.",
 			},
 			logEditor: {
 				timelineHeader_one: 'Timeline · {{count}} entry',
@@ -62,7 +65,7 @@ const resources = {
 				durationLabel: 'Minutes spent',
 				durationPlaceholder: '45',
 				tagsLabel: 'Tags (comma separated)',
-				tagsPlaceholder: 'bugfix, api, refactor',
+				tagsPlaceholder: 'Type to search or add a tag…',
 				notesLabel: 'Notes (Markdown)',
 				editButton: 'Edit',
 				previewButton: 'Preview',
@@ -70,6 +73,7 @@ const resources = {
 					'What did you work on? Use **bold**, *italic*, `code`, ```blocks```...',
 				saveButton: 'Save entry',
 				updateButton: 'Save changes',
+				saving: 'Saving…',
 				emptyPreview: 'Nothing to preview yet.',
 			},
 			stats: {
@@ -165,10 +169,14 @@ const resources = {
 				loading: 'Загрузка проектов…',
 				loadError:
 					'Не удалось связаться с бэкендом — показаны кэшированные данные.',
+				deleteError: 'Не удалось удалить проект на сервере.',
 				retry: 'Повторить',
 			},
 			logsScreen: {
 				selectFirst: 'Сначала выберите проект на экране «Проекты».',
+				loading: 'Загрузка записей…',
+				loadError:
+					'Не удалось связаться с бэкендом — показаны кэшированные записи.',
 			},
 			logEditor: {
 				timelineHeader_one: 'Хроника · {{count}} запись',
@@ -185,7 +193,7 @@ const resources = {
 				durationLabel: 'Затрачено минут',
 				durationPlaceholder: '45',
 				tagsLabel: 'Теги (через запятую)',
-				tagsPlaceholder: 'багфикс, api, рефакторинг',
+				tagsPlaceholder: 'Введите, чтобы найти или добавить тег…',
 				notesLabel: 'Заметки (Markdown)',
 				editButton: 'Редактор',
 				previewButton: 'Превью',
@@ -193,6 +201,7 @@ const resources = {
 					'Чем вы занимались? Используйте **жирный**, *курсив*, `код`, ```блоки```...',
 				saveButton: 'Сохранить запись',
 				updateButton: 'Сохранить изменения',
+				saving: 'Сохранение…',
 				emptyPreview: 'Пока нечего показать.',
 			},
 			stats: {

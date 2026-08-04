@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 function escapeHtml(str) {
@@ -133,19 +133,182 @@ function formatDuration(minutes) {
 	return `${h}h ${m}m`
 }
 
+/**
+ * Поле выбора тегов записи:
+ *   - уже выбранные теги — чипсы с крестиком удаления внутри самого поля;
+ *   - под полем — плашки ВСЕХ тегов, которые уже встречались в этом
+ *     проекте (кроме уже выбранных) — клик сразу добавляет тег;
+ *   - по мере ввода в поле — выпадающий список подходящих тегов
+ *     (подстрокой, без учёта регистра) для автокомплита;
+ *   - Enter/запятая всегда добавляет то, что введено, даже если это
+ *     совсем новый тег, которого не было в suggestions.
+ *
+ * `suggestions` приходит из App.jsx (см. loadProjectTags) — это реальный
+ * GET /api/projects/:id/tags, а не локальное вычисление из уже открытых
+ * записей. Сам TagPicker про это ничего не знает, ему всё равно откуда
+ * взялся string[].
+ */
+function TagPicker({ value, onChange, suggestions, placeholder }) {
+	const [draft, setDraft] = useState('')
+	const [isOpen, setIsOpen] = useState(false)
+	const [highlightedIndex, setHighlightedIndex] = useState(-1)
+	const inputRef = useRef(null)
+
+	const normalizedValue = value.map(t => t.toLowerCase())
+
+	const filteredSuggestions = draft.trim()
+		? suggestions
+				.filter(tag => !normalizedValue.includes(tag.toLowerCase()))
+				.filter(tag => tag.toLowerCase().includes(draft.trim().toLowerCase()))
+				.slice(0, 8)
+		: []
+
+	const quickPicks = suggestions.filter(
+		tag => !normalizedValue.includes(tag.toLowerCase()),
+	)
+
+	function addTag(rawTag) {
+		const tag = rawTag.trim()
+		if (!tag || normalizedValue.includes(tag.toLowerCase())) {
+			setDraft('')
+			setIsOpen(false)
+			return
+		}
+		onChange([...value, tag])
+		setDraft('')
+		setIsOpen(false)
+		setHighlightedIndex(-1)
+		inputRef.current?.focus()
+	}
+
+	function removeTag(tag) {
+		onChange(value.filter(t => t !== tag))
+	}
+
+	function handleKeyDown(e) {
+		if (e.key === 'Enter' || e.key === ',') {
+			e.preventDefault()
+			if (
+				isOpen &&
+				highlightedIndex >= 0 &&
+				filteredSuggestions[highlightedIndex]
+			) {
+				addTag(filteredSuggestions[highlightedIndex])
+			} else if (draft.trim()) {
+				addTag(draft)
+			}
+		} else if (e.key === 'ArrowDown') {
+			e.preventDefault()
+			if (filteredSuggestions.length) {
+				setIsOpen(true)
+				setHighlightedIndex(i =>
+					Math.min(i + 1, filteredSuggestions.length - 1),
+				)
+			}
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault()
+			setHighlightedIndex(i => Math.max(i - 1, 0))
+		} else if (e.key === 'Escape') {
+			setIsOpen(false)
+			setHighlightedIndex(-1)
+		} else if (e.key === 'Backspace' && !draft && value.length > 0) {
+			onChange(value.slice(0, -1))
+		}
+	}
+
+	return (
+		<div className='relative'>
+			<div className='flex flex-wrap gap-1.5 items-center w-full bg-slate-900 border border-slate-800 rounded-md px-2 py-1.5 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500'>
+				{value.map(tag => (
+					<span
+						key={tag}
+						className='flex items-center gap-1 text-[11px] pl-2 pr-1 py-1 rounded bg-slate-800 text-teal-300 border border-slate-700 font-mono'
+					>
+						#{tag}
+						<button
+							type='button'
+							onClick={() => removeTag(tag)}
+							className='p-0.5 rounded hover:bg-slate-700 hover:text-white transition-colors'
+							aria-label={`Remove ${tag}`}
+						>
+							<XIcon className='w-2.5 h-2.5' />
+						</button>
+					</span>
+				))}
+				<input
+					ref={inputRef}
+					type='text'
+					value={draft}
+					onChange={e => {
+						setDraft(e.target.value)
+						setIsOpen(true)
+						setHighlightedIndex(-1)
+					}}
+					onKeyDown={handleKeyDown}
+					onFocus={() => setIsOpen(true)}
+					// Небольшая задержка перед закрытием: иначе onBlur успевает
+					// сработать раньше onClick по пункту дропдауна (клик бы
+					// просто не долетал) — onMouseDown ниже с preventDefault
+					// решает то же самое для варианта с мышью.
+					onBlur={() => setTimeout(() => setIsOpen(false), 120)}
+					placeholder={value.length ? '' : placeholder}
+					className='flex-1 min-w-[80px] bg-transparent text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none py-0.5'
+				/>
+			</div>
+
+			{isOpen && filteredSuggestions.length > 0 && (
+				<div className='absolute z-30 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md shadow-lg shadow-black/40 max-h-48 overflow-y-auto py-1'>
+					{filteredSuggestions.map((tag, i) => (
+						<button
+							key={tag}
+							type='button'
+							onMouseDown={e => e.preventDefault()}
+							onClick={() => addTag(tag)}
+							className={`w-full text-left px-3 py-1.5 text-sm font-mono transition-colors ${
+								i === highlightedIndex
+									? 'bg-slate-800 text-teal-300'
+									: 'text-slate-300 hover:bg-slate-800/60'
+							}`}
+						>
+							#{tag}
+						</button>
+					))}
+				</div>
+			)}
+
+			{quickPicks.length > 0 && (
+				<div className='flex flex-wrap gap-1.5 mt-2'>
+					{quickPicks.map(tag => (
+						<button
+							key={tag}
+							type='button'
+							onClick={() => addTag(tag)}
+							className='text-[11px] px-2 py-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:border-teal-700 hover:text-teal-300 transition-colors font-mono'
+						>
+							+ #{tag}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	)
+}
+
 export default function LogEditor({
 	activeProject,
 	projectEntries,
+	isSaving,
 	onSaveEntry,
 	onUpdateEntry,
 	onDeleteEntry,
+	existingTags = [],
 }) {
 	const { t, i18n } = useTranslation()
 	const dateLocale = i18n.language?.startsWith('ru') ? 'ru-RU' : 'en-US'
 	const today = toLocalISODate(new Date())
 	const [date, setDate] = useState(today)
 	const [duration, setDuration] = useState('')
-	const [tagsInput, setTagsInput] = useState('')
+	const [tags, setTags] = useState([])
 	const [text, setText] = useState('')
 	const [mode, setMode] = useState('edit')
 	const [editingEntryId, setEditingEntryId] = useState(null)
@@ -160,7 +323,7 @@ export default function LogEditor({
 	function resetForm() {
 		setDate(today)
 		setDuration('')
-		setTagsInput('')
+		setTags([])
 		setText('')
 		setMode('edit')
 		setEditingEntryId(null)
@@ -170,7 +333,7 @@ export default function LogEditor({
 		setEditingEntryId(entry.id)
 		setDate(entry.date)
 		setDuration(String(entry.durationMinutes ?? ''))
-		setTagsInput((entry.tags || []).join(', '))
+		setTags(entry.tags || [])
 		setText(entry.text || '')
 		setMode('edit')
 	}
@@ -186,26 +349,28 @@ export default function LogEditor({
 		resetForm()
 	}
 
-	function handleSubmit(e) {
+	async function handleSubmit(e) {
 		e.preventDefault()
-		if (!duration || !text.trim()) return
+		if (!duration || !text.trim() || isSaving) return
 
-		const tags = tagsInput
-			.split(',')
-			.map(tag => tag.trim())
-			.filter(Boolean)
+		// tags уже массив (см. TagPicker) — на всякий случай подчищаем
+		// пустые/задвоенные значения перед отправкой.
+		const cleanTags = Array.from(
+			new Set(tags.map(tag => tag.trim()).filter(Boolean)),
+		)
 
+		let result
 		if (isEditingEntry) {
-			onUpdateEntry({
+			result = await onUpdateEntry({
 				id: editingEntryId,
 				projectId: activeProject.id,
 				date,
 				durationMinutes: Number(duration),
 				text: text.trim(),
-				tags,
+				tags: cleanTags,
 			})
 		} else {
-			onSaveEntry({
+			result = await onSaveEntry({
 				id:
 					typeof crypto !== 'undefined' && crypto.randomUUID
 						? crypto.randomUUID()
@@ -214,15 +379,19 @@ export default function LogEditor({
 				date,
 				durationMinutes: Number(duration),
 				text: text.trim(),
-				tags,
+				tags: cleanTags,
 			})
 		}
 
-		resetForm()
+		// onSaveEntry/onUpdateEntry возвращают null при ошибке (см. App.jsx) —
+		// в этом случае не сбрасываем форму, чтобы не потерять черновик.
+		if (result) {
+			resetForm()
+		}
 	}
 
 	return (
-		<div className='h-screen overflow-hidden flex flex-col'>
+		<div className='flex-1 min-h-0 h-full overflow-hidden flex flex-col'>
 			<header className='px-8 py-6 border-b border-slate-800 shrink-0'>
 				<div className='flex items-center gap-2.5'>
 					<span
@@ -362,12 +531,11 @@ export default function LogEditor({
 							<label className='block text-xs text-slate-500 mb-1'>
 								{t('logEditor.tagsLabel')}
 							</label>
-							<input
-								type='text'
+							<TagPicker
+								value={tags}
+								onChange={setTags}
+								suggestions={existingTags}
 								placeholder={t('logEditor.tagsPlaceholder')}
-								value={tagsInput}
-								onChange={e => setTagsInput(e.target.value)}
-								className='w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500'
 							/>
 						</div>
 
@@ -423,11 +591,14 @@ export default function LogEditor({
 
 						<button
 							type='submit'
-							className='w-full py-2.5 rounded-md bg-teal-500 hover:bg-teal-400 text-slate-950 text-sm font-semibold transition-colors'
+							disabled={isSaving}
+							className='w-full py-2.5 rounded-md bg-teal-500 hover:bg-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-sm font-semibold transition-colors'
 						>
-							{isEditingEntry
-								? t('logEditor.updateButton')
-								: t('logEditor.saveButton')}
+							{isSaving
+								? t('logEditor.saving')
+								: isEditingEntry
+									? t('logEditor.updateButton')
+									: t('logEditor.saveButton')}
 						</button>
 					</form>
 				</div>

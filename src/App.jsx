@@ -1,14 +1,29 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import {
+	Routes,
+	Route,
+	Navigate,
+	useNavigate,
+	useLocation,
+} from 'react-router-dom'
 import './i18n'
 import SideBar from './components/SideBar'
 import ProjectCard from './components/ProjectCard'
 import ProjectNotes from './pages/ProjectNotes'
-import { getProjects, createProject } from './api/client'
+import {
+	getProjects,
+	createProject,
+	updateProject,
+	deleteProject,
+	getEntries,
+	createEntry,
+	updateEntry,
+	deleteEntry,
+	getProjectTags,
+} from './api/client'
 
 const PROJECTS_KEY = 'devlog_projects'
-const ENTRIES_KEY = 'devlog_entries'
 
 const COLOR_PRESETS = [
 	'#2dd4bf', // teal
@@ -31,12 +46,6 @@ function toLocalISODate(date) {
 	const month = String(d.getMonth() + 1).padStart(2, '0')
 	const day = String(d.getDate()).padStart(2, '0')
 	return `${year}-${month}-${day}`
-}
-
-function isoDaysAgo(n) {
-	const d = new Date()
-	d.setDate(d.getDate() - n)
-	return toLocalISODate(d)
 }
 
 function escapeHtml(str) {
@@ -113,74 +122,13 @@ function buildMockData() {
 		},
 	]
 
-	const entries = [
-		{
-			id: 'e1',
-			projectId: 'proj-devlog',
-			date: isoDaysAgo(0),
-			durationMinutes: 90,
-			text: 'Scaffolded the **Sidebar** and **ProjectCard** components. Wired up `localStorage` persistence with a lazy `useState` initializer.\n\n- Nav highlights active screen\n- Logs tab disabled until a project is selected',
-			tags: ['setup', 'react'],
-		},
-		{
-			id: 'e2',
-			projectId: 'proj-devlog',
-			date: isoDaysAgo(2),
-			durationMinutes: 45,
-			text: 'Sketched the data model for `Project` and `Entry`. Decided against a backend for v1 — everything stays in `localStorage` so the app works fully offline.',
-			tags: ['planning'],
-		},
-		{
-			id: 'e3',
-			projectId: 'proj-devlog',
-			date: isoDaysAgo(6),
-			durationMinutes: 120,
-			text: 'Built the markdown-lite renderer for entry notes. Supports `**bold**`, `*italic*`, inline `code`, and fenced ```blocks```.',
-			tags: ['markdown', 'editor'],
-		},
-		{
-			id: 'e4',
-			projectId: 'proj-api',
-			date: isoDaysAgo(1),
-			durationMinutes: 75,
-			text: 'Debugged a race condition in the invoice webhook handler. Root cause was a missing `await` on the idempotency check.',
-			tags: ['bugfix', 'webhooks'],
-		},
-		{
-			id: 'e5',
-			projectId: 'proj-api',
-			date: isoDaysAgo(4),
-			durationMinutes: 60,
-			text: 'Added retry logic with exponential backoff for the payment gateway client. Wrote unit tests for the backoff calculator.',
-			tags: ['reliability', 'tests'],
-		},
-		{
-			id: 'e6',
-			projectId: 'proj-api',
-			date: isoDaysAgo(9),
-			durationMinutes: 50,
-			text: 'Migrated the `invoices` table to add a `currency` column.',
-			tags: ['migration'],
-		},
-		{
-			id: 'e7',
-			projectId: 'proj-side',
-			date: isoDaysAgo(3),
-			durationMinutes: 30,
-			text: 'Prototyped a boot-sequence animation for the landing page using CSS keyframes only, no JS.',
-			tags: ['css', 'animation'],
-		},
-		{
-			id: 'e8',
-			projectId: 'proj-side',
-			date: isoDaysAgo(11),
-			durationMinutes: 40,
-			text: 'Set up the project repo and deployed a placeholder page.',
-			tags: ['setup'],
-		},
-	]
+	// Записи (entries) больше не имеют mock/localStorage-фолбэка — они
+	// всегда приходят с реального бэкенда через getEntries() (см. ниже
+	// loadEntriesForActiveProject). Пустой список тут — это не "нет
+	// данных пока не загрузилось", а корректное значение по умолчанию
+	// на время самого первого запроса.
 
-	return { projects, entries }
+	return { projects }
 }
 
 function loadFromStorage(key, fallback) {
@@ -217,12 +165,27 @@ export default function App() {
 	// модалке создания, т.к. баннер на ProjectsScreen скрыт за оверлеем.
 	const [createProjectError, setCreateProjectError] = useState(null)
 	const [isCreatingProject, setIsCreatingProject] = useState(false)
+	const [updateProjectError, setUpdateProjectError] = useState(null)
+	const [isUpdatingProject, setIsUpdatingProject] = useState(false)
+	// Ошибка удаления проекта — отдельно от projectsError (тот про GET),
+	// показывается баннером на ProjectsScreen поверх списка карточек.
+	const [deleteProjectError, setDeleteProjectError] = useState(null)
 
-	// Записи (entries) пока полностью на localStorage — на бэкенде нет
-	// ни одного роута под Entry (см. комментарий в шапке api/client.js).
-	const [entries, setEntries] = useState(() =>
-		loadFromStorage(ENTRIES_KEY, mock.entries),
-	)
+	// Записи (entries) больше не кэшируются в localStorage и не имеют
+	// mock-фолбэка — единственный источник правды это бэкенд
+	// (getEntries/createEntry/updateEntry/deleteEntry из api/client.js).
+	// loadEntriesForActiveProject ниже подтягивает их при заходе на
+	// /projects/:id.
+	const [entries, setEntries] = useState([])
+	const [entriesLoading, setEntriesLoading] = useState(false)
+	const [entriesError, setEntriesError] = useState(null)
+	const [isSavingEntry, setIsSavingEntry] = useState(false)
+
+	// Список тегов текущего проекта — для бейджей/автокомплита в TagPicker.
+	// Тянется с реального бэкенда (GET /api/projects/:id/tags), а не
+	// вычисляется из уже загруженных entries — так подсказки одинаковые
+	// на любом устройстве, а не только там, где теги были введены руками.
+	const [projectTags, setProjectTags] = useState([])
 
 	const navigate = useNavigate()
 	const location = useLocation()
@@ -247,7 +210,8 @@ export default function App() {
 	function setScreen(key) {
 		if (key === 'projects') navigate('/')
 		else if (key === 'stats') navigate('/stats')
-		else if (key === 'logs' && activeProjectId) navigate(`/projects/${activeProjectId}`)
+		else if (key === 'logs' && activeProjectId)
+			navigate(`/projects/${activeProjectId}`)
 	}
 
 	const loadProjects = useCallback(async () => {
@@ -282,13 +246,53 @@ export default function App() {
 		}
 	}, [location.pathname, backendConnected, navigate])
 
+	const loadEntriesForActiveProject = useCallback(async () => {
+		if (!activeProjectId) return
+		setEntriesLoading(true)
+		setEntriesError(null)
+		try {
+			const data = await getEntries(activeProjectId)
+			// Заменяем в общем списке только записи ЭТОГО проекта — записи
+			// других уже открытых проектов (если пользователь переключался
+			// между ними в этой сессии) не трогаем.
+			setEntries(prev => {
+				const others = prev.filter(
+					e => String(e.projectId) !== String(activeProjectId),
+				)
+				return [...others, ...data]
+			})
+		} catch (error) {
+			// Бэкенд недоступен (сеть/CORS/сервер лёг) — оставляем то, что
+			// уже было в state для этого проекта, но явно показываем
+			// ошибку, а не выдаём устаревшие данные за свежие молча.
+			console.error('Не удалось загрузить записи с бэкенда:', error)
+			setEntriesError(error.message)
+		} finally {
+			setEntriesLoading(false)
+		}
+	}, [activeProjectId])
+
+	const loadProjectTags = useCallback(async () => {
+		if (!activeProjectId) return
+		try {
+			const tags = await getProjectTags(activeProjectId)
+			setProjectTags(tags)
+		} catch (error) {
+			// Не критично для основного флоу (можно продолжать работать с
+			// записями без подсказок тегов) — просто логируем и оставляем
+			// то, что было раньше, вместо того чтобы обнулять список.
+			console.error('Не удалось загрузить теги проекта с бэкенда:', error)
+		}
+	}, [activeProjectId])
+
+	useEffect(() => {
+		loadEntriesForActiveProject()
+		loadProjectTags()
+	}, [loadEntriesForActiveProject, loadProjectTags])
+
 	useEffect(() => {
 		window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects))
 	}, [projects])
-
-	useEffect(() => {
-		window.localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries))
-	}, [entries])
 
 	function handleSelectProject(id) {
 		navigate(`/projects/${id}`)
@@ -317,44 +321,103 @@ export default function App() {
 			setIsCreatingProject(false)
 		}
 	}
-	// ⚠️ PUT /api/projects/<id> на бэкенде ещё нет (см. api/client.js) —
-	// пока редактирование только локальное, изменения не долетают до сервера
-	// и потеряются при следующей загрузке через getProjects().
-	function handleUpdateProject(updatedProject) {
-		setProjects(prev =>
-			prev.map(p =>
-				p.id === updatedProject.id ? { ...p, ...updatedProject } : p,
-			),
-		)
-		setEditingProject(null)
-	}
-	// ⚠️ DELETE /api/projects/<id> на бэкенде тоже ещё нет — та же оговорка.
-	function handleDeleteProject(projectId) {
-		// 1. Удаляем сам проект
-		setProjects(prev => prev.filter(p => p.id !== projectId))
-
-		// 2. Очищаем все записи, принадлежащие этому проекту
-		setEntries(prev => prev.filter(e => e.projectId !== projectId))
-
-		// 3. Если удаленный проект был активным (сравниваем как строки, т.к.
-		// activeProjectId всегда приходит из URL), уводим со страницы проекта.
-		if (String(activeProjectId) === String(projectId)) {
-			navigate('/')
+	async function handleUpdateProject(updatedProject) {
+		setUpdateProjectError(null)
+		setIsUpdatingProject(true)
+		try {
+			const saved = await updateProject(updatedProject.id, {
+				name: updatedProject.name,
+				color: updatedProject.color,
+				description: updatedProject.description,
+			})
+			setProjects(prev => prev.map(p => (p.id === saved.id ? saved : p)))
+			setEditingProject(null)
+		} catch (error) {
+			console.error('Не удалось обновить проект на бэкенде:', error)
+			setUpdateProjectError(error.message)
+			// Модалку не закрываем — иначе правки молча потеряются при
+			// следующей загрузке через getProjects().
+		} finally {
+			setIsUpdatingProject(false)
 		}
 	}
 
-	function handleSaveEntry(entry) {
-		setEntries(prev => [...prev, entry])
+	async function handleDeleteProject(projectId) {
+		setDeleteProjectError(null)
+		try {
+			await deleteProject(projectId)
+			// DELETE /api/projects/<id> каскадно удаляет и записи проекта
+			// на бэкенде — здесь просто синхронизируем локальный state.
+			setProjects(prev => prev.filter(p => p.id !== projectId))
+			setEntries(prev =>
+				prev.filter(e => String(e.projectId) !== String(projectId)),
+			)
+			if (String(activeProjectId) === String(projectId)) {
+				navigate('/')
+			}
+		} catch (error) {
+			console.error('Не удалось удалить проект на бэкенде:', error)
+			setDeleteProjectError(error.message)
+			// Ничего не убираем из UI — раз сервер не удалил, проект
+			// "вернулся" бы сам при следующем getProjects(), и было бы
+			// непонятно, почему он то исчезает, то появляется.
+		}
 	}
 
-	function handleUpdateEntry(updatedEntry) {
-		setEntries(prev =>
-			prev.map(e => (e.id === updatedEntry.id ? { ...e, ...updatedEntry } : e)),
-		)
+	async function handleSaveEntry(entry) {
+		// entry.id — временный client-side id из LogEditor.jsx. Как и с
+		// проектами: сервер сам назначит настоящий id, поэтому в стейт
+		// добавляем именно то, что вернул createEntry(), а не черновик.
+		setIsSavingEntry(true)
+		setEntriesError(null)
+		try {
+			const created = await createEntry(entry)
+			setEntries(prev => [...prev, created])
+			// Могли создаться новые теги (get-or-create на бэке в
+			// _resolve_tags) — обновляем список подсказок для TagPicker.
+			loadProjectTags()
+			return created
+		} catch (error) {
+			console.error('Не удалось сохранить запись на бэкенде:', error)
+			setEntriesError(error.message)
+			// Не добавляем локально — иначе запись "потеряется" молча при
+			// следующей загрузке через getEntries(). Возвращаем null, чтобы
+			// LogEditor не сбрасывал форму и пользователь не потерял черновик.
+			return null
+		} finally {
+			setIsSavingEntry(false)
+		}
 	}
 
-	function handleDeleteEntry(entryId) {
-		setEntries(prev => prev.filter(e => e.id !== entryId))
+	async function handleUpdateEntry(updatedEntry) {
+		setIsSavingEntry(true)
+		setEntriesError(null)
+		try {
+			const saved = await updateEntry(updatedEntry.id, updatedEntry)
+			setEntries(prev => prev.map(e => (e.id === saved.id ? saved : e)))
+			loadProjectTags()
+			return saved
+		} catch (error) {
+			console.error('Не удалось обновить запись на бэкенде:', error)
+			setEntriesError(error.message)
+			return null
+		} finally {
+			setIsSavingEntry(false)
+		}
+	}
+
+	async function handleDeleteEntry(entryId) {
+		setEntriesError(null)
+		try {
+			await deleteEntry(entryId)
+			setEntries(prev => prev.filter(e => e.id !== entryId))
+		} catch (error) {
+			console.error('Не удалось удалить запись на бэкенде:', error)
+			setEntriesError(error.message)
+			// Не убираем запись из UI, раз сервер её не удалил — иначе
+			// после перезагрузки/повторного getEntries() она "вернётся",
+			// и будет непонятно, почему.
+		}
 	}
 
 	return (
@@ -379,6 +442,7 @@ export default function App() {
 								onRetry={loadProjects}
 								onSelect={handleSelectProject}
 								onDeleteProject={handleDeleteProject}
+								deleteError={deleteProjectError}
 								onEditProject={setEditingProject}
 								onOpenModal={() => setShowNewProjectModal(true)}
 							/>
@@ -391,9 +455,14 @@ export default function App() {
 							<ProjectNotes
 								projects={projects}
 								entries={entries}
+								entriesLoading={entriesLoading}
+								entriesError={entriesError}
+								onRetryEntries={loadEntriesForActiveProject}
+								isSavingEntry={isSavingEntry}
 								onSaveEntry={handleSaveEntry}
 								onUpdateEntry={handleUpdateEntry}
 								onDeleteEntry={handleDeleteEntry}
+								projectTags={projectTags}
 							/>
 						}
 					/>
@@ -433,8 +502,13 @@ export default function App() {
 			{editingProject && (
 				<NewProjectModal
 					project={editingProject}
-					onClose={() => setEditingProject(null)}
+					onClose={() => {
+						setEditingProject(null)
+						setUpdateProjectError(null)
+					}}
 					onCreate={handleUpdateProject}
+					error={updateProjectError}
+					submitting={isUpdatingProject}
 				/>
 			)}
 		</div>
@@ -449,6 +523,7 @@ function ProjectsScreen({
 	onRetry,
 	onSelect,
 	onDeleteProject,
+	deleteError,
 	onEditProject,
 	onOpenModal,
 }) {
@@ -488,6 +563,17 @@ function ProjectsScreen({
 					>
 						{t('projectsScreen.retry')}
 					</button>
+				</div>
+			)}
+
+			{deleteError && (
+				<div className='mb-6 rounded-md border border-red-900/50 bg-red-950/20 px-4 py-3'>
+					<p className='text-sm text-red-400'>
+						{t('projectsScreen.deleteError')}
+						<span className='block text-xs text-red-500/70 mt-0.5'>
+							{deleteError}
+						</span>
+					</p>
 				</div>
 			)}
 

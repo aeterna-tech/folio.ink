@@ -294,10 +294,6 @@ export default function App() {
 		window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects))
 	}, [projects])
 
-	useEffect(() => {
-		window.localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries))
-	}, [entries])
-
 	function handleSelectProject(id) {
 		navigate(`/projects/${id}`)
 	}

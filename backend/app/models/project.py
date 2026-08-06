@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import db
 
 
@@ -21,9 +21,9 @@ class Project(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     # created_at заполняется автоматически при создании записи
-    # datetime.utcnow — функция, а не вызов (без скобок!) —
-    # SQLAlchemy сам вызовет её в момент вставки
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # используем lambda, т.к. datetime.now(timezone.utc) — это вызов,
+    # а не функция-ссылка, как раньше был datetime.utcnow (deprecated)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         """

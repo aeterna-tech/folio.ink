@@ -1,5 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import db
+
+
+def utc_now():
+    """Возвращает наивный datetime, но всегда в UTC.
+    SQLite не хранит таймзоны — если писать aware-datetime,
+    смещение молча теряется при сохранении. Явно приводим
+    к наивному представлению, чтобы семантика 'всегда UTC'
+    была осознанной, а не случайным побочным эффектом."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Project(db.Model):
@@ -8,29 +17,18 @@ class Project(db.Model):
     Каждая строка = один проект пользователя (например "folio.ink", "Pet-проект")
     """
 
-    # id — первичный ключ, SQLite сам генерирует автоинкрементом
     id = db.Column(db.Integer, primary_key=True)
-
-    # nullable=False значит "обязательное поле", без имени проект не создать
     name = db.Column(db.String(100), nullable=False)
-
-    # цвет в hex-формате для UI, например "#1D9E75"
     color = db.Column(db.String(7), nullable=True)
-
-    # текстовое описание, может быть пустым
     description = db.Column(db.Text, nullable=True)
 
-    # created_at заполняется автоматически при создании записи
-    # datetime.utcnow — функция, а не вызов (без скобок!) —
-    # SQLAlchemy сам вызовет её в момент вставки
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # используем utc_now (без tzinfo) вместо datetime.now(timezone.utc) —
+    # SQLite всё равно не хранит offset, поэтому явно приводим к наивному
+    # UTC-времени, чтобы не было расхождения между тем что записано
+    # в объект Python и тем что реально сохранится в базе
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     def to_dict(self):
-        """
-        Конвертирует объект Project в обычный Python-словарь,
-        чтобы потом Flask мог превратить его в JSON через jsonify().
-        Без этого метода Flask не знает как сериализовать объект модели.
-        """
         return {
             "id": self.id,
             "name": self.name,

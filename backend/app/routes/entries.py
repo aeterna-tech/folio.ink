@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from app.database import db
 from app.models.entry import Entry
@@ -80,7 +80,7 @@ def create_entry(project_id):
         if entry_date is None:
             return jsonify({"error": "Поле 'date' должно быть в формате YYYY-MM-DD"}), 400
     else:
-        entry_date = datetime.utcnow().date()
+        entry_date = datetime.now(timezone.utc).date()
 
     tags = _resolve_tags(data.get('tags', []))
 

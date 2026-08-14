@@ -1,0 +1,15 @@
+# Tauri, CI/CD, конфиги
+/.github/                  @v1tharr
+/src-tauri/                @v1tharr @plynd @Kazmech-cmd @Gyroballthrower
+
+# БД
+/backend/app/database.py   @v1tharr @Kazmech-cmd
+
+# Бэк
+/backend/app/models/       @v1tharr @Kazmech-cmd
+/backend/app/routes/       @v1tharr @Kazmech-cmd
+/backend/test/             @v1tharr @Kazmech-cmd
+/backend/run.py            @v1tharr @Kazmech-cmd
+
+# Фронтенд
+/src/                      @plynd @Gyroballthrower

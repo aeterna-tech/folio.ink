@@ -34,6 +34,28 @@ def create_project():
     return jsonify(new_project.to_dict()), 201
 
 
+@projects_bp.route('/api/projects/<int:project_id>/export', methods=['GET'])
+def export_project(project_id):
+    project = db.session.get(Project, project_id)
+    if project is None:
+        return jsonify({"error": "Проект не найден"}), 404
+
+    entries = (
+        Entry.query
+        .filter_by(project_id=project_id)
+        .order_by(Entry.date.desc(), Entry.id.desc())
+        .all()
+    )
+    response = jsonify({
+        "project": project.to_dict(),
+        "entries": [entry.to_dict() for entry in entries]
+    })
+    response.headers['Content-Disposition'] = (
+        f'attachment; filename="project-{project_id}-export.json"'
+    )
+    return response
+
+
 @projects_bp.route('/api/projects/<int:project_id>', methods=['PUT'])
 def update_project(project_id):
 

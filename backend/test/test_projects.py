@@ -170,6 +170,73 @@ class TestUpdateProject:
         assert response.status_code == 400
 
 
+class TestExportProject:
+    def test_exports_project_with_its_entries(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+        from app.models.tag import Tag
+
+        with app.app_context():
+            project = Project(
+                name="Экспортируемый проект",
+                color="#123456",
+                description="Описание"
+            )
+            other_project = Project(name="Другой проект")
+            tag = Tag(name="backend")
+            db.session.add_all([project, other_project, tag])
+            db.session.flush()
+
+            older_entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 10),
+                duration_min=30,
+                content="Первая запись",
+                tags=[tag]
+            )
+            newer_entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 11),
+                duration_min=45,
+                content="Вторая запись"
+            )
+            other_entry = Entry(
+                project_id=other_project.id,
+                date=date(2026, 7, 12),
+                duration_min=60,
+                content="Чужая запись"
+            )
+            db.session.add_all([older_entry, newer_entry, other_entry])
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export')
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert response.mimetype == 'application/json'
+        assert response.headers['Content-Disposition'] == (
+            f'attachment; filename="project-{project_id}-export.json"'
+        )
+        assert data['project']['id'] == project_id
+        assert data['project']['name'] == "Экспортируемый проект"
+        assert [entry['content'] for entry in data['entries']] == [
+            "Вторая запись",
+            "Первая запись"
+        ]
+        assert data['entries'][1]['tags'] == ["backend"]
+        assert all(
+            entry['project_id'] == project_id
+            for entry in data['entries']
+        )
+
+    def test_404_for_unknown_project(self, client):
+        response = client.get('/api/projects/999/export')
+
+        assert response.status_code == 404
+        assert "error" in response.get_json()
+
+
 class TestDeleteProject:
     def test_404_for_unknown_project(self, client):
         assert client.delete('/api/projects/999').status_code == 404

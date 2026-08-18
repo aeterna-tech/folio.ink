@@ -41,3 +41,19 @@ jobs:
         run: |
           cd backend
           pytest -v
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Установка зависимостей
+        run: npm install
+
+      - name: Запуск тестов
+        run: npm run test

@@ -1,15 +1,11 @@
-# Tauri, CI/CD, конфиги
+# default owner
+*                          @v1tharr
+
+# infra & native
 /.github/                  @v1tharr
-/src-tauri/                @v1tharr @plynd @Kazmech-cmd @Gyroballthrower
+/src-tauri/                @v1tharr
+# back
+/backend/                  @v1tharr @Kazmech-cmd @honseymo
 
-# БД
-/backend/app/database.py   @v1tharr @Kazmech-cmd
-
-# Бэк
-/backend/app/models/       @v1tharr @Kazmech-cmd
-/backend/app/routes/       @v1tharr @Kazmech-cmd
-/backend/test/             @v1tharr @Kazmech-cmd
-/backend/run.py            @v1tharr @Kazmech-cmd
-
-# Фронтенд
+# front
 /src/                      @plynd @Gyroballthrower

@@ -353,14 +353,6 @@ export default function LogEditor({
 		const newText =
 			text.slice(0, start) + before + selected + after + text.slice(end)
 		setText(newText)
-<<<<<<< Updated upstream
-		// textarea уже перерисовалась с новым value только после коммита —
-		// ставим курсор/выделение на следующий кадр, иначе setSelectionRange
-=======
-		// textarea перерисуется с новым value только после коммита — ставим
-		// курсор/выделение на следующий кадр, иначе setSelectionRange
->>>>>>> Stashed changes
-		// применится к старому DOM-узлу со старым текстом.
 		requestAnimationFrame(() => {
 			el.focus()
 			const selStart = start + before.length

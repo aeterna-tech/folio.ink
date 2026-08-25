@@ -66,11 +66,7 @@ const resources = {
 				durationPlaceholder: '45',
 				tagsLabel: 'Tags (comma separated)',
 				tagsPlaceholder: 'Type to search or add a tag…',
-<<<<<<< Updated upstream
-				notesLabel: 'Notes',
-=======
 				notesLabel: 'Notes (Markdown)',
->>>>>>> Stashed changes
 				boldTooltip: 'Bold',
 				italicTooltip: 'Italic',
 				headingTooltip: 'Heading',
@@ -221,11 +217,7 @@ const resources = {
 				durationPlaceholder: '45',
 				tagsLabel: 'Теги (через запятую)',
 				tagsPlaceholder: 'Введите, чтобы найти или добавить тег…',
-<<<<<<< Updated upstream
-				notesLabel: 'Заметки',
-=======
 				notesLabel: 'Заметки (Markdown)',
->>>>>>> Stashed changes
 				boldTooltip: 'Жирный',
 				italicTooltip: 'Курсив',
 				headingTooltip: 'Заголовок',

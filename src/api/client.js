@@ -163,3 +163,34 @@ export const getProjectTags = async projectId => {
 	const raw = await request(`/api/projects/${projectId}/tags`)
 	return raw.map(tag => tag.name)
 }
+
+// --- Экспорт всей истории проекта -------------------------------------
+// GET /api/projects/<id>/export?format=md
+//
+// ⚠️ Это НЕ то же самое, что фильтруемый дайджест из DigestModal
+// (utils/digest.js) — этот роут отдаёт ВСЕ записи проекта целиком, без
+// фильтрации по датам/тегам (бэкенд там смотрит только на ?format).
+// Используется как отдельная кнопка "выгрузить всю историю", а не как
+// замена пресетам "Стендап/Отчёт/Brag doc".
+//
+// Идёт мимо общего request() специально: тот всегда делает response.json(),
+// а здесь ответ — обычный текст (text/markdown), не JSON.
+export const exportProjectMarkdown = async projectId => {
+	let response
+	try {
+		response = await fetch(
+			`${BASE_URL}/api/projects/${projectId}/export?format=md`,
+		)
+	} catch (error) {
+		throw new Error(
+			`Не удалось достучаться до ${BASE_URL}/api/projects/${projectId}/export. Бэкенд запущен?`,
+			{ cause: error },
+		)
+	}
+	if (!response.ok) {
+		throw new Error(
+			`Ошибка ${response.status} при экспорте проекта ${projectId}`,
+		)
+	}
+	return response.text()
+}

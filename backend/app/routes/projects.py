@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from app.models.entry import Entry
 from app.database import db
 from app.models.project import Project
@@ -34,6 +34,35 @@ def create_project():
     return jsonify(new_project.to_dict()), 201
 
 
+def _render_markdown(project, entries):
+    """
+    Рендерит проект и его записи в Markdown.
+    Формат: заголовок = имя проекта, описание под ним, дальше
+    каждая запись — секция с датой (и тегами через '·', если есть),
+    длительностью и текстом.
+    """
+    lines = [f"# {project.name}"]
+
+    if project.description:
+        lines.append("")
+        lines.append(project.description)
+
+    for entry in entries:
+        lines.append("")
+        heading = f"## {entry.date.isoformat()}" if entry.date else "## (без даты)"
+        if entry.tags:
+            tag_list = " ".join(f"#{tag.name}" for tag in entry.tags)
+            heading += f" · {tag_list}"
+        lines.append(heading)
+        lines.append(f"**{entry.duration_min} мин**")
+
+        if entry.content:
+            lines.append("")
+            lines.append(entry.content)
+
+    return "\n".join(lines) + "\n"
+
+
 @projects_bp.route('/api/projects/<int:project_id>/export', methods=['GET'])
 def export_project(project_id):
     project = db.session.get(Project, project_id)
@@ -46,6 +75,17 @@ def export_project(project_id):
         .order_by(Entry.date.desc(), Entry.id.desc())
         .all()
     )
+
+    export_format = request.args.get('format', 'json')
+
+    if export_format == 'md':
+        markdown = _render_markdown(project, entries)
+        response = Response(markdown, mimetype='text/markdown')
+        response.headers['Content-Disposition'] = (
+            f'attachment; filename="project-{project_id}-export.md"'
+        )
+        return response
+
     response = jsonify({
         "project": project.to_dict(),
         "entries": [entry.to_dict() for entry in entries]

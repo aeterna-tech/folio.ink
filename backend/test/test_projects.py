@@ -236,6 +236,89 @@ class TestExportProject:
         assert response.status_code == 404
         assert "error" in response.get_json()
 
+    def test_export_as_markdown(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+        from app.models.tag import Tag
+
+        with app.app_context():
+            project = Project(
+                name="Экспортируемый проект",
+                color="#123456",
+                description="Описание проекта"
+            )
+            tag = Tag(name="backend")
+            db.session.add_all([project, tag])
+            db.session.flush()
+
+            entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 10),
+                duration_min=30,
+                content="Первая запись",
+                tags=[tag]
+            )
+            db.session.add(entry)
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export?format=md')
+        text = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert response.mimetype == 'text/markdown'
+        assert response.headers['Content-Disposition'] == (
+            f'attachment; filename="project-{project_id}-export.md"'
+        )
+        assert text.startswith("# Экспортируемый проект")
+        assert "Описание проекта" in text
+        assert "## 2026-07-10 · #backend" in text
+        assert "**30 мин**" in text
+        assert "Первая запись" in text
+
+    def test_export_markdown_without_description_or_tags(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Простой проект")
+            db.session.add(project)
+            db.session.flush()
+
+            entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 10),
+                duration_min=15
+            )
+            db.session.add(entry)
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export?format=md')
+        text = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert text.startswith("# Простой проект")
+        assert "## 2026-07-10" in text
+        assert "·" not in text
+
+    def test_json_is_still_default_format(self, client, app):
+        with app.app_context():
+            project = Project(name="Проект по умолчанию")
+            from app.database import db
+            db.session.add(project)
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export')
+
+        assert response.mimetype == 'application/json'
+
+    def test_404_for_unknown_project_markdown(self, client):
+        response = client.get('/api/projects/999/export?format=md')
+
+        assert response.status_code == 404
+
 
 class TestDeleteProject:
     def test_404_for_unknown_project(self, client):

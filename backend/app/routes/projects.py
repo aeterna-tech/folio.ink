@@ -34,6 +34,36 @@ def create_project():
     return jsonify(new_project.to_dict()), 201
 
 
+@projects_bp.route('/api/projects/<int:project_id>', methods=['GET'])
+def get_project(project_id):
+    """Возвращает проект и last_next_step из последней записи с заполненным next_step."""
+    project = db.session.get(Project, project_id)
+    if project is None:
+        return jsonify({"error": "Проект не найден"}), 404
+
+    # Ищем последнюю запись проекта, у которой next_step не пустой.
+    # Сортировка: сначала по date DESC, при равных датах — по id DESC (свежайшая).
+    latest = (
+        Entry.query
+        .filter_by(project_id=project_id)
+        .filter(Entry.next_step.isnot(None), Entry.next_step != "")
+        .order_by(Entry.date.desc(), Entry.id.desc())
+        .first()
+    )
+
+    result = project.to_dict()
+    if latest is not None:
+        result["last_next_step"] = {
+            "text": latest.next_step,
+            "entry_id": latest.id,
+            "entry_date": latest.date.isoformat() if latest.date else None,
+        }
+    else:
+        result["last_next_step"] = None
+
+    return jsonify(result)
+
+
 def _render_markdown(project, entries):
     """
     Рендерит проект и его записи в Markdown.

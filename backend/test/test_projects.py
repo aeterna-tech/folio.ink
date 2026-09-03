@@ -354,3 +354,111 @@ class TestDeleteProject:
 
         with app.app_context():
             assert Entry.query.filter_by(project_id=project_id).count() == 0
+
+class TestGetProjectById:
+    def test_404_for_unknown_project(self, client):
+        response = client.get('/api/projects/999')
+
+        assert response.status_code == 404
+        assert "error" in response.get_json()
+
+    def test_returns_project_with_null_next_step(self, client, app):
+        from app.database import db
+
+        with app.app_context():
+            project = Project(name="Проект по id", color="#AABBCC", description="описание")
+            db.session.add(project)
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["name"] == "Проект по id"
+        assert data["color"] == "#AABBCC"
+        assert data["last_next_step"] is None
+
+    def test_returns_last_next_step(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="С шагами")
+            db.session.add(project)
+            db.session.flush()
+
+            older = Entry(project_id=project.id, date=date(2026, 9, 1),
+                          duration_min=30, next_step="старый шаг")
+            newer = Entry(project_id=project.id, date=date(2026, 9, 3),
+                          duration_min=45, next_step="свежий шаг")
+            db.session.add_all([older, newer])
+            db.session.commit()
+            project_id = project.id
+            newer_id = newer.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"]["text"] == "свежий шаг"
+        assert data["last_next_step"]["entry_id"] == newer_id
+        assert data["last_next_step"]["entry_date"] == "2026-09-03"
+
+    def test_null_when_entries_have_no_next_step(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Без шагов")
+            db.session.add(project)
+            db.session.flush()
+
+            db.session.add(Entry(project_id=project.id, date=date(2026, 9, 1),
+                                 duration_min=30, content="просто запись"))
+            db.session.add(Entry(project_id=project.id, date=date(2026, 9, 2),
+                                 duration_min=30, next_step=""))
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"] is None
+
+    def test_same_date_picks_newer_entry(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Одна дата")
+            db.session.add(project)
+            db.session.flush()
+
+            first = Entry(project_id=project.id, date=date(2026, 9, 3),
+                          duration_min=10, next_step="первый")
+            second = Entry(project_id=project.id, date=date(2026, 9, 3),
+                           duration_min=20, next_step="второй")
+            db.session.add_all([first, second])
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"]["text"] == "второй"
+
+    def test_does_not_mix_entries_of_other_projects(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Свой")
+            other = Project(name="Чужой")
+            db.session.add_all([project, other])
+            db.session.flush()
+
+            db.session.add(Entry(project_id=project.id, date=date(2026, 9, 1),
+                                 duration_min=10, next_step="свой шаг"))
+            db.session.add(Entry(project_id=other.id, date=date(2026, 9, 4),
+                                 duration_min=10, next_step="чужой шаг"))
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"]["text"] == "свой шаг"

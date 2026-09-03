@@ -354,6 +354,7 @@ class TestDeleteProject:
 
         with app.app_context():
             assert Entry.query.filter_by(project_id=project_id).count() == 0
+            
 
 class TestGetProjectById:
     def test_404_for_unknown_project(self, client):

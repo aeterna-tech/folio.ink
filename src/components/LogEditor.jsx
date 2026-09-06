@@ -37,6 +37,10 @@ function renderMarkdown(raw, emptyText) {
 		'<h2 class="text-slate-100 font-bold text-base mt-3 mb-1">$1</h2>',
 	)
 	html = html.replace(
+		/^# (.*)$/gm,
+		'<h1 class="text-slate-100 font-bold text-lg mt-3 mb-1">$1</h1>',
+	)
+	html = html.replace(
 		/^- (.*)$/gm,
 		'<li class="ml-4 list-disc text-slate-300">$1</li>',
 	)
@@ -317,8 +321,89 @@ export default function LogEditor({
 		(a, b) => new Date(b.date) - new Date(a.date),
 	)
 
+	const textareaRef = useRef(null)
+
 	const emptyPreviewText = t('logEditor.emptyPreview')
 	const isEditingEntry = Boolean(editingEntryId)
+
+	/**
+	 * Оборачивает выделение маркером с обеих сторон (bold/italic).
+	 * Если ничего не выделено — вставляет плейсхолдер и выделяет его,
+	 * чтобы пользователь мог сразу начать печатать поверх.
+	 */
+	function applyWrapFormatting(marker, placeholder) {
+		const textarea = textareaRef.current
+		if (!textarea) return
+
+		const { selectionStart, selectionEnd, value } = textarea
+		const selected = value.slice(selectionStart, selectionEnd)
+		const hasSelection = selected.length > 0
+		const inserted = hasSelection ? selected : placeholder
+
+		const newValue =
+			value.slice(0, selectionStart) +
+			marker +
+			inserted +
+			marker +
+			value.slice(selectionEnd)
+
+		setText(newValue)
+
+		const selStart = selectionStart + marker.length
+		const selEnd = selStart + inserted.length
+
+		// textarea управляется React (controlled) — курсор/выделение можно
+		// восстановить только после того, как обновлённое value долетит до
+		// DOM, поэтому setSelectionRange откладываем на следующий кадр.
+		requestAnimationFrame(() => {
+			textarea.focus()
+			textarea.setSelectionRange(selStart, selEnd)
+		})
+	}
+
+	/**
+	 * Ставит префикс в начало строки/строк (heading, bullet list).
+	 * Работает по границам строк, а не по точному выделению: если курсор
+	 * просто стоит внутри строки — форматируется вся строка, если выделено
+	 * несколько строк — префикс добавляется к каждой из них.
+	 */
+	function applyLinePrefixFormatting(prefix, placeholder) {
+		const textarea = textareaRef.current
+		if (!textarea) return
+
+		const { selectionStart, selectionEnd, value } = textarea
+		const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
+		let lineEnd = value.indexOf('\n', selectionEnd)
+		if (lineEnd === -1) lineEnd = value.length
+
+		const block = value.slice(lineStart, lineEnd)
+		const hasContent = block.trim().length > 0
+
+		const newBlock = hasContent
+			? block
+					.split('\n')
+					.map(line => (line.startsWith(prefix) ? line : prefix + line))
+					.join('\n')
+			: prefix + placeholder
+
+		const newValue = value.slice(0, lineStart) + newBlock + value.slice(lineEnd)
+		setText(newValue)
+
+		requestAnimationFrame(() => {
+			textarea.focus()
+			if (hasContent) {
+				const cursor = lineStart + newBlock.length
+				textarea.setSelectionRange(cursor, cursor)
+			} else {
+				// Выделяем плейсхолдер целиком, чтобы можно было сразу
+				// напечатать текст заголовка/пункта поверх него.
+				textarea.setSelectionRange(
+					lineStart + prefix.length,
+					lineStart + newBlock.length,
+				)
+			}
+		})
+	}
 
 	function resetForm() {
 		setDate(today)
@@ -571,14 +656,85 @@ export default function LogEditor({
 							</div>
 
 							{mode === 'edit' ? (
-								<textarea
-									value={text}
-									onChange={e => setText(e.target.value)}
-									placeholder={t('logEditor.textPlaceholder')}
-									rows={10}
-									className='w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 font-mono leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500'
-									required
-								/>
+								<>
+									<div className='flex items-center gap-1 mb-1.5 bg-slate-900 border border-slate-800 rounded-md p-1'>
+										<button
+											type='button'
+											onClick={() =>
+												applyWrapFormatting(
+													'**',
+													t('logEditor.toolbarBoldPlaceholder'),
+												)
+											}
+											title={t('logEditor.toolbarBold')}
+											className='w-7 h-7 flex items-center justify-center rounded text-xs font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+										>
+											B
+										</button>
+										<button
+											type='button'
+											onClick={() =>
+												applyWrapFormatting(
+													'*',
+													t('logEditor.toolbarItalicPlaceholder'),
+												)
+											}
+											title={t('logEditor.toolbarItalic')}
+											className='w-7 h-7 flex items-center justify-center rounded text-xs italic text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+										>
+											I
+										</button>
+										<span className='w-px h-4 bg-slate-800 mx-0.5' />
+										<button
+											type='button'
+											onClick={() =>
+												applyLinePrefixFormatting(
+													'# ',
+													t('logEditor.toolbarHeadingPlaceholder'),
+												)
+											}
+											title={t('logEditor.toolbarHeading')}
+											className='w-7 h-7 flex items-center justify-center rounded text-xs font-mono font-semibold text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+										>
+											H
+										</button>
+										<button
+											type='button'
+											onClick={() =>
+												applyLinePrefixFormatting(
+													'- ',
+													t('logEditor.toolbarListPlaceholder'),
+												)
+											}
+											title={t('logEditor.toolbarBulletList')}
+											className='w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+										>
+											<svg
+												xmlns='http://www.w3.org/2000/svg'
+												fill='none'
+												viewBox='0 0 24 24'
+												strokeWidth={1.8}
+												stroke='currentColor'
+												className='w-3.5 h-3.5'
+											>
+												<path
+													strokeLinecap='round'
+													strokeLinejoin='round'
+													d='M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z'
+												/>
+											</svg>
+										</button>
+									</div>
+									<textarea
+										ref={textareaRef}
+										value={text}
+										onChange={e => setText(e.target.value)}
+										placeholder={t('logEditor.textPlaceholder')}
+										rows={10}
+										className='w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 font-mono leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500'
+										required
+									/>
+								</>
 							) : (
 								<div
 									className='w-full min-h-[15rem] bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-300 leading-relaxed'

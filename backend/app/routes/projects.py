@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from app.models.entry import Entry
 from app.database import db
 from app.models.project import Project
@@ -71,3 +71,63 @@ def delete_project(project_id):
     db.session.commit()
 
     return '', 204
+
+
+@projects_bp.route('/api/projects/<int:project_id>/export', methods=['GET'])
+def export_project(project_id):
+    """
+    Экспорт "сырых" записей проекта — без standup/sprint report/brag doc:
+    вся синтетика теперь целиком на фронтенде (src/utils/artifacts.js),
+    бэкенд просто отдаёт entries проекта как есть, в одном из двух форматов.
+
+    Query-параметры:
+      format — 'json' | 'md' (default: 'json')
+               ВАЖНО: без явного ?format=md эндпоинт всегда отдаёт JSON —
+               фронтенду для скачивания файла нужно указывать его явно
+               (см. exportProject() в src/api/client.js).
+    """
+    project = db.session.get(Project, project_id)
+    if project is None:
+        return jsonify({"error": "Проект не найден"}), 404
+
+    entries = (
+        Entry.query
+        .filter_by(project_id=project_id)
+        .order_by(Entry.date.asc(), Entry.id.asc())
+        .all()
+    )
+
+    export_format = request.args.get('format', 'json')
+
+    if export_format == 'md':
+        lines = [f"# {project.name}", ""]
+
+        if not entries:
+            lines.append("_No entries yet._")
+        else:
+            for entry in entries:
+                hours = entry.duration_min / 60
+                tag_names = [tag.name for tag in entry.tags]
+                tags_suffix = (
+                    '  ' + ' '.join(f'#{name}' for name in tag_names)
+                    if tag_names else ''
+                )
+                content = (entry.content or '').strip()
+                line = f"- {entry.date.isoformat()} — **{hours:.1f}h**"
+                if content:
+                    line += f" — {content}"
+                lines.append(line + tags_suffix)
+
+        markdown = '\n'.join(lines) + '\n'
+        filename = f"{project.name}.md".replace(' ', '_')
+
+        return Response(
+            markdown,
+            mimetype='text/markdown',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        )
+
+    return jsonify({
+        "project": project.to_dict(),
+        "entries": [e.to_dict() for e in entries],
+    })

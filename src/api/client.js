@@ -163,3 +163,52 @@ export const getProjectTags = async projectId => {
 	const raw = await request(`/api/projects/${projectId}/tags`)
 	return raw.map(tag => tag.name)
 }
+
+// --- Экспорт проекта (сырые записи) -------------------------------------
+// GET /api/projects/<id>/export?format=md
+//
+// Бэкенд больше не знает про пресеты (standup/sprint report/brag doc) —
+// это целиком на фронтенде, см. src/utils/artifacts.js. Этот эндпоинт
+// отдаёт только "сырые" entries проекта, в JSON или Markdown.
+//
+// ВАЖНО: бэкенд по умолчанию отдаёт JSON, если 'format' не передан явно —
+// export_project() в projects.py требует ?format=md, иначе скачивания не
+// будет, придёт JSON с телом ответа вместо файла.
+//
+// Возвращаем { blob, filename }, а не сразу триггерим download — сама
+// логика "создать <a>, кликнуть, отозвать URL" осталась в компоненте
+// (LogEditor.jsx), чтобы client.js не знал про DOM.
+export const exportProject = async (projectId, { format = 'md' } = {}) => {
+	const path = `/api/projects/${projectId}/export?format=${format}`
+
+	let response
+	try {
+		response = await fetch(`${BASE_URL}${path}`)
+	} catch (error) {
+		throw new Error(
+			`Не удалось достучаться до ${BASE_URL}${path}. Бэкенд запущен?`,
+			{ cause: error },
+		)
+	}
+
+	if (!response.ok) {
+		let message = `Ошибка ${response.status} при экспорте проекта`
+		try {
+			const body = await response.json()
+			if (body?.error) message = body.error
+		} catch {
+			// тело не JSON (например, уже упавший md-ответ) — оставляем
+			// общее сообщение
+		}
+		throw new Error(message)
+	}
+
+	// Имя файла бэкенд кладёт в Content-Disposition (см. export_project) —
+	// берём оттуда, а не собираем на фронте, чтобы не разъехалось.
+	const disposition = response.headers.get('Content-Disposition') || ''
+	const match = disposition.match(/filename="?([^"]+)"?/)
+	const filename = match ? match[1] : `${projectId}-export.md`
+
+	const blob = await response.blob()
+	return { blob, filename }
+}

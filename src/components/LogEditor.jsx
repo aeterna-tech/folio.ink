@@ -1,8 +1,27 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { exportProject } from '../api/client'
+import { generateArtifact, PRESETS } from '../utils/artifacts'
 
 function escapeHtml(str) {
 	return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Триггерит скачивание блоба через временный <a download> — общий хелпер
+ * для "сырого" экспорта проекта (blob приходит с бэкенда) и для
+ * артефактов, сгенерированных на фронтенде (blob собирается из строки
+ * Markdown прямо здесь).
+ */
+function downloadBlob(blob, filename) {
+	const url = URL.createObjectURL(blob)
+	const link = document.createElement('a')
+	link.href = url
+	link.download = filename
+	document.body.appendChild(link)
+	link.click()
+	link.remove()
+	URL.revokeObjectURL(url)
 }
 
 // Minimal markdown-ish renderer: bold, italic, inline code, code blocks,
@@ -105,6 +124,26 @@ function XIcon(props) {
 				strokeLinecap='round'
 				strokeLinejoin='round'
 				d='M6 18 18 6M6 6l12 12'
+			/>
+		</svg>
+	)
+}
+
+function DownloadIcon(props) {
+	return (
+		<svg
+			xmlns='http://www.w3.org/2000/svg'
+			fill='none'
+			viewBox='0 0 24 24'
+			strokeWidth={1.8}
+			stroke='currentColor'
+			className='w-3.5 h-3.5'
+			{...props}
+		>
+			<path
+				strokeLinecap='round'
+				strokeLinejoin='round'
+				d='M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3'
 			/>
 		</svg>
 	)
@@ -317,6 +356,15 @@ export default function LogEditor({
 	const [mode, setMode] = useState('edit')
 	const [editingEntryId, setEditingEntryId] = useState(null)
 
+	const [exportError, setExportError] = useState(null)
+	const [isExporting, setIsExporting] = useState(false)
+
+	const [artifactError, setArtifactError] = useState(null)
+	// Ключ пресета, для которого только что успешно сработал "Copy" —
+	// используется для мгновенной обратной связи в самой кнопке
+	// ("Standup" -> "Copied!" на секунду-полторы), сбрасывается таймером.
+	const [copiedPreset, setCopiedPreset] = useState(null)
+
 	const sortedEntries = [...projectEntries].sort(
 		(a, b) => new Date(b.date) - new Date(a.date),
 	)
@@ -434,6 +482,65 @@ export default function LogEditor({
 		resetForm()
 	}
 
+	/**
+	 * ?format=md ОБЯЗАТЕЛЕН — без него export_project() на бэкенде отдаёт
+	 * JSON вместо файла (см. комментарий в client.js). Это "сырой" экспорт
+	 * всех entries проекта, без какой-либо синтетики — за
+	 * standup/report/brag doc отвечает handleArtifactAction() ниже.
+	 */
+	async function handleExport() {
+		setExportError(null)
+		setIsExporting(true)
+		try {
+			const { blob, filename } = await exportProject(activeProject.id, {
+				format: 'md',
+			})
+			downloadBlob(blob, filename)
+		} catch (error) {
+			console.error('Не удалось экспортировать проект:', error)
+			setExportError(error.message)
+		} finally {
+			setIsExporting(false)
+		}
+	}
+
+	/**
+	 * Standup/Sprint Report/Brag Doc — синтезируются целиком на фронтенде
+	 * из уже загруженных projectEntries (generateArtifact в
+	 * src/utils/artifacts.js), бэкенд тут вообще не участвует.
+	 * action: 'copy' -> в буфер обмена, 'download' -> .md-файл.
+	 */
+	async function handleArtifactAction(presetKey, action) {
+		setArtifactError(null)
+		let markdown
+		try {
+			markdown = generateArtifact(projectEntries, presetKey)
+		} catch (error) {
+			console.error('Не удалось сгенерировать артефакт:', error)
+			setArtifactError(error.message)
+			return
+		}
+
+		if (action === 'download') {
+			downloadBlob(
+				new Blob([markdown], { type: 'text/markdown' }),
+				`${activeProject.name}-${presetKey}.md`,
+			)
+			return
+		}
+
+		try {
+			await navigator.clipboard.writeText(markdown)
+			setCopiedPreset(presetKey)
+			setTimeout(() => {
+				setCopiedPreset(prev => (prev === presetKey ? null : prev))
+			}, 1500)
+		} catch (error) {
+			console.error('Не удалось скопировать артефакт в буфер обмена:', error)
+			setArtifactError(t('logEditor.artifactCopyError'))
+		}
+	}
+
 	async function handleSubmit(e) {
 		e.preventDefault()
 		if (!duration || !text.trim() || isSaving) return
@@ -478,18 +585,76 @@ export default function LogEditor({
 	return (
 		<div className='flex-1 min-h-0 h-full overflow-hidden flex flex-col'>
 			<header className='px-8 py-6 border-b border-slate-800 shrink-0'>
-				<div className='flex items-center gap-2.5'>
-					<span
-						className='w-3 h-3 rounded-full shrink-0'
-						style={{ backgroundColor: activeProject.color }}
-					/>
-					<h2 className='text-xl font-semibold text-slate-100 truncate'>
-						{activeProject.name}
-					</h2>
+				<div className='flex items-start justify-between gap-4 flex-wrap'>
+					<div className='min-w-0'>
+						<div className='flex items-center gap-2.5'>
+							<span
+								className='w-3 h-3 rounded-full shrink-0'
+								style={{ backgroundColor: activeProject.color }}
+							/>
+							<h2 className='text-xl font-semibold text-slate-100 truncate'>
+								{activeProject.name}
+							</h2>
+						</div>
+						{activeProject.description && (
+							<p className='text-sm text-slate-500 mt-1'>
+								{activeProject.description}
+							</p>
+						)}
+					</div>
+
+					<div className='flex items-center gap-1.5 flex-wrap justify-end'>
+						{Object.values(PRESETS).map(preset => (
+							<div
+								key={preset.key}
+								className='flex items-center rounded-md border border-slate-700 bg-slate-900 overflow-hidden shrink-0'
+							>
+								<button
+									type='button'
+									onClick={() => handleArtifactAction(preset.key, 'copy')}
+									title={t('logEditor.artifactCopyTooltip')}
+									className='px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-colors whitespace-nowrap'
+								>
+									{copiedPreset === preset.key
+										? t('logEditor.copied')
+										: t(`logEditor.presetLabel_${preset.key}`)}
+								</button>
+								<button
+									type='button'
+									onClick={() => handleArtifactAction(preset.key, 'download')}
+									title={t('logEditor.artifactDownloadTooltip')}
+									className='px-1.5 py-1.5 border-l border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors'
+								>
+									<DownloadIcon />
+								</button>
+							</div>
+						))}
+
+						<button
+							type='button'
+							onClick={handleExport}
+							disabled={isExporting}
+							title={t('logEditor.exportTooltip')}
+							className='flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900 text-xs font-semibold text-slate-200 hover:bg-slate-800 hover:border-slate-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0'
+						>
+							<DownloadIcon />
+							{isExporting
+								? t('logEditor.exporting')
+								: t('logEditor.exportButton')}
+						</button>
+					</div>
 				</div>
-				{activeProject.description && (
-					<p className='text-sm text-slate-500 mt-1'>
-						{activeProject.description}
+
+				{artifactError && (
+					<p className='mt-2 text-xs text-red-400'>{artifactError}</p>
+				)}
+
+				{exportError && (
+					<p className='mt-2 text-xs text-red-400'>
+						{t('logEditor.exportError')}
+						<span className='block text-[11px] text-red-500/70 mt-0.5'>
+							{exportError}
+						</span>
 					</p>
 				)}
 			</header>

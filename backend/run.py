@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_cors import CORS
 from app.database import init_db
@@ -23,4 +24,11 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, port=5000)
+    # debug=True запускает Flask reloader, который порождает ДВА процесса
+    # (родительский монитор + рабочий) — это ломает graceful shutdown
+    # sidecar-процесса из Tauri, потому что kill() убивает только один
+    # из двух. Debug включаем явно через переменную окружения — для
+    # обычной разработки (python run.py вручную), но не для sidecar
+    # внутри собранного приложения, где reloader не нужен и вреден.
+    is_dev = os.environ.get('FOLIO_DEV') == '1'
+    app.run(debug=is_dev, port=5000)

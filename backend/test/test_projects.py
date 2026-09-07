@@ -170,6 +170,156 @@ class TestUpdateProject:
         assert response.status_code == 400
 
 
+class TestExportProject:
+    def test_exports_project_with_its_entries(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+        from app.models.tag import Tag
+
+        with app.app_context():
+            project = Project(
+                name="Экспортируемый проект",
+                color="#123456",
+                description="Описание"
+            )
+            other_project = Project(name="Другой проект")
+            tag = Tag(name="backend")
+            db.session.add_all([project, other_project, tag])
+            db.session.flush()
+
+            older_entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 10),
+                duration_min=30,
+                content="Первая запись",
+                tags=[tag]
+            )
+            newer_entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 11),
+                duration_min=45,
+                content="Вторая запись"
+            )
+            other_entry = Entry(
+                project_id=other_project.id,
+                date=date(2026, 7, 12),
+                duration_min=60,
+                content="Чужая запись"
+            )
+            db.session.add_all([older_entry, newer_entry, other_entry])
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export')
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert response.mimetype == 'application/json'
+        assert response.headers['Content-Disposition'] == (
+            f'attachment; filename="project-{project_id}-export.json"'
+        )
+        assert data['project']['id'] == project_id
+        assert data['project']['name'] == "Экспортируемый проект"
+        assert [entry['content'] for entry in data['entries']] == [
+            "Вторая запись",
+            "Первая запись"
+        ]
+        assert data['entries'][1]['tags'] == ["backend"]
+        assert all(
+            entry['project_id'] == project_id
+            for entry in data['entries']
+        )
+
+    def test_404_for_unknown_project(self, client):
+        response = client.get('/api/projects/999/export')
+
+        assert response.status_code == 404
+        assert "error" in response.get_json()
+
+    def test_export_as_markdown(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+        from app.models.tag import Tag
+
+        with app.app_context():
+            project = Project(
+                name="Экспортируемый проект",
+                color="#123456",
+                description="Описание проекта"
+            )
+            tag = Tag(name="backend")
+            db.session.add_all([project, tag])
+            db.session.flush()
+
+            entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 10),
+                duration_min=30,
+                content="Первая запись",
+                tags=[tag]
+            )
+            db.session.add(entry)
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export?format=md')
+        text = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert response.mimetype == 'text/markdown'
+        assert response.headers['Content-Disposition'] == (
+            f'attachment; filename="project-{project_id}-export.md"'
+        )
+        assert text.startswith("# Экспортируемый проект")
+        assert "Описание проекта" in text
+        assert "## 2026-07-10 · #backend" in text
+        assert "**30 мин**" in text
+        assert "Первая запись" in text
+
+    def test_export_markdown_without_description_or_tags(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Простой проект")
+            db.session.add(project)
+            db.session.flush()
+
+            entry = Entry(
+                project_id=project.id,
+                date=date(2026, 7, 10),
+                duration_min=15
+            )
+            db.session.add(entry)
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export?format=md')
+        text = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert text.startswith("# Простой проект")
+        assert "## 2026-07-10" in text
+        assert "·" not in text
+
+    def test_json_is_still_default_format(self, client, app):
+        with app.app_context():
+            project = Project(name="Проект по умолчанию")
+            from app.database import db
+            db.session.add(project)
+            db.session.commit()
+            project_id = project.id
+
+        response = client.get(f'/api/projects/{project_id}/export')
+
+        assert response.mimetype == 'application/json'
+
+    def test_404_for_unknown_project_markdown(self, client):
+        response = client.get('/api/projects/999/export?format=md')
+
+        assert response.status_code == 404
+
+
 class TestDeleteProject:
     def test_404_for_unknown_project(self, client):
         assert client.delete('/api/projects/999').status_code == 404
@@ -204,3 +354,112 @@ class TestDeleteProject:
 
         with app.app_context():
             assert Entry.query.filter_by(project_id=project_id).count() == 0
+
+
+class TestGetProjectById:
+    def test_404_for_unknown_project(self, client):
+        response = client.get('/api/projects/999')
+
+        assert response.status_code == 404
+        assert "error" in response.get_json()
+
+    def test_returns_project_with_null_next_step(self, client, app):
+        from app.database import db
+
+        with app.app_context():
+            project = Project(name="Проект по id", color="#AABBCC", description="описание")
+            db.session.add(project)
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["name"] == "Проект по id"
+        assert data["color"] == "#AABBCC"
+        assert data["last_next_step"] is None
+
+    def test_returns_last_next_step(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="С шагами")
+            db.session.add(project)
+            db.session.flush()
+
+            older = Entry(project_id=project.id, date=date(2026, 9, 1),
+                          duration_min=30, next_step="старый шаг")
+            newer = Entry(project_id=project.id, date=date(2026, 9, 3),
+                          duration_min=45, next_step="свежий шаг")
+            db.session.add_all([older, newer])
+            db.session.commit()
+            project_id = project.id
+            newer_id = newer.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"]["text"] == "свежий шаг"
+        assert data["last_next_step"]["entry_id"] == newer_id
+        assert data["last_next_step"]["entry_date"] == "2026-09-03"
+
+    def test_null_when_entries_have_no_next_step(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Без шагов")
+            db.session.add(project)
+            db.session.flush()
+
+            db.session.add(Entry(project_id=project.id, date=date(2026, 9, 1),
+                                 duration_min=30, content="просто запись"))
+            db.session.add(Entry(project_id=project.id, date=date(2026, 9, 2),
+                                 duration_min=30, next_step=""))
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"] is None
+
+    def test_same_date_picks_newer_entry(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Одна дата")
+            db.session.add(project)
+            db.session.flush()
+
+            first = Entry(project_id=project.id, date=date(2026, 9, 3),
+                          duration_min=10, next_step="первый")
+            second = Entry(project_id=project.id, date=date(2026, 9, 3),
+                           duration_min=20, next_step="второй")
+            db.session.add_all([first, second])
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"]["text"] == "второй"
+
+    def test_does_not_mix_entries_of_other_projects(self, client, app):
+        from app.database import db
+        from app.models.entry import Entry
+
+        with app.app_context():
+            project = Project(name="Свой")
+            other = Project(name="Чужой")
+            db.session.add_all([project, other])
+            db.session.flush()
+
+            db.session.add(Entry(project_id=project.id, date=date(2026, 9, 1),
+                                 duration_min=10, next_step="свой шаг"))
+            db.session.add(Entry(project_id=other.id, date=date(2026, 9, 4),
+                                 duration_min=10, next_step="чужой шаг"))
+            db.session.commit()
+            project_id = project.id
+
+        data = client.get(f'/api/projects/{project_id}').get_json()
+
+        assert data["last_next_step"]["text"] == "свой шаг"

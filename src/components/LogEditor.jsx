@@ -106,6 +106,26 @@ function XIcon(props) {
 	)
 }
 
+function ListIcon(props) {
+	return (
+		<svg
+			xmlns='http://www.w3.org/2000/svg'
+			fill='none'
+			viewBox='0 0 24 24'
+			strokeWidth={1.8}
+			stroke='currentColor'
+			className='w-4 h-4'
+			{...props}
+		>
+			<path
+				strokeLinecap='round'
+				strokeLinejoin='round'
+				d='M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z'
+			/>
+		</svg>
+	)
+}
+
 function formatDate(dateStr, locale) {
 	const d = new Date(`${dateStr}T00:00:00`)
 	return d.toLocaleDateString(locale, {
@@ -312,6 +332,7 @@ export default function LogEditor({
 	const [text, setText] = useState('')
 	const [mode, setMode] = useState('edit')
 	const [editingEntryId, setEditingEntryId] = useState(null)
+	const textareaRef = useRef(null)
 
 	const sortedEntries = [...projectEntries].sort(
 		(a, b) => new Date(b.date) - new Date(a.date),
@@ -319,6 +340,48 @@ export default function LogEditor({
 
 	const emptyPreviewText = t('logEditor.emptyPreview')
 	const isEditingEntry = Boolean(editingEntryId)
+
+	// Оборачивает выделенный в textarea текст маркерами (напр. **bold**).
+	// Если ничего не выделено — вставляет placeholder уже выделенным,
+	// чтобы пользователь мог сразу начать печатать поверх него.
+	function wrapSelection(before, after, placeholder) {
+		const el = textareaRef.current
+		if (!el) return
+		const start = el.selectionStart
+		const end = el.selectionEnd
+		const selected = text.slice(start, end) || placeholder
+		const newText =
+			text.slice(0, start) + before + selected + after + text.slice(end)
+		setText(newText)
+		requestAnimationFrame(() => {
+			el.focus()
+			const selStart = start + before.length
+			el.setSelectionRange(selStart, selStart + selected.length)
+		})
+	}
+
+	// Добавляет префикс (напр. "## " или "- ") в начало каждой строки,
+	// затронутой текущим выделением — как в обычных markdown-редакторах.
+	function prefixLines(prefix) {
+		const el = textareaRef.current
+		if (!el) return
+		const start = el.selectionStart
+		const end = el.selectionEnd
+		const lineStart = text.lastIndexOf('\n', start - 1) + 1
+		const nextBreak = text.indexOf('\n', end)
+		const lineEnd = nextBreak === -1 ? text.length : nextBreak
+		const block = text.slice(lineStart, lineEnd)
+		const prefixed = block
+			.split('\n')
+			.map(line => prefix + line)
+			.join('\n')
+		const delta = prefixed.length - block.length
+		setText(text.slice(0, lineStart) + prefixed + text.slice(lineEnd))
+		requestAnimationFrame(() => {
+			el.focus()
+			el.setSelectionRange(start + prefix.length, end + delta)
+		})
+	}
 
 	function resetForm() {
 		setDate(today)
@@ -570,8 +633,47 @@ export default function LogEditor({
 								</div>
 							</div>
 
+							{mode === 'edit' && (
+								<div className='flex items-center gap-0.5 mb-2 bg-slate-900 border border-slate-800 rounded-md p-1 w-fit'>
+									<button
+										type='button'
+										title={t('logEditor.boldTooltip')}
+										onClick={() => wrapSelection('**', '**', 'bold')}
+										className='w-7 h-7 flex items-center justify-center rounded font-bold text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+									>
+										B
+									</button>
+									<button
+										type='button'
+										title={t('logEditor.italicTooltip')}
+										onClick={() => wrapSelection('*', '*', 'italic')}
+										className='w-7 h-7 flex items-center justify-center rounded italic font-serif text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+									>
+										I
+									</button>
+									<button
+										type='button'
+										title={t('logEditor.headingTooltip')}
+										onClick={() => prefixLines('## ')}
+										className='w-7 h-7 flex items-center justify-center rounded font-bold text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+									>
+										H
+									</button>
+									<div className='w-px h-4 bg-slate-800 mx-1' />
+									<button
+										type='button'
+										title={t('logEditor.listTooltip')}
+										onClick={() => prefixLines('- ')}
+										className='w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors'
+									>
+										<ListIcon />
+									</button>
+								</div>
+							)}
+
 							{mode === 'edit' ? (
 								<textarea
+									ref={textareaRef}
 									value={text}
 									onChange={e => setText(e.target.value)}
 									placeholder={t('logEditor.textPlaceholder')}

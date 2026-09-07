@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import LogEditor from '../components/LogEditor'
+import DigestModal from '../components/DigestModal'
 
 /**
  * Экран заметок/логов конкретного проекта — маршрут /projects/:id.
@@ -36,6 +37,7 @@ export default function ProjectNotes({
 	const { id } = useParams()
 	const navigate = useNavigate()
 	const { t } = useTranslation()
+	const [showDigestModal, setShowDigestModal] = useState(false)
 
 	const activeProject = useMemo(
 		() => projects.find(p => String(p.id) === String(id)) ?? null,
@@ -66,7 +68,7 @@ export default function ProjectNotes({
 	}
 
 	return (
-		<div className='h-screen flex flex-col'>
+		<div className='h-screen flex flex-col relative'>
 			{entriesError && (
 				<div className='shrink-0 flex items-center justify-between gap-3 border-b border-red-900/50 bg-red-950/20 px-8 py-2.5'>
 					<p className='text-xs text-red-400'>
@@ -85,6 +87,16 @@ export default function ProjectNotes({
 				</div>
 			)}
 
+			{!entriesLoading && (
+				<button
+					type='button'
+					onClick={() => setShowDigestModal(true)}
+					className='absolute top-6 right-8 z-10 px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900 text-slate-200 text-xs font-semibold hover:bg-slate-800 hover:border-slate-600 transition-colors'
+				>
+					{t('digest.openButton')}
+				</button>
+			)}
+
 			{entriesLoading ? (
 				<div className='flex-1 flex items-center justify-center'>
 					<p className='text-sm text-slate-500'>{t('logsScreen.loading')}</p>
@@ -98,6 +110,15 @@ export default function ProjectNotes({
 					onUpdateEntry={onUpdateEntry}
 					onDeleteEntry={onDeleteEntry}
 					existingTags={projectTags}
+				/>
+			)}
+
+			{showDigestModal && (
+				<DigestModal
+					project={activeProject}
+					entries={projectEntries}
+					availableTags={projectTags}
+					onClose={() => setShowDigestModal(false)}
 				/>
 			)}
 		</div>

@@ -1,5 +1,7 @@
 import subprocess
 
+import pytest
+
 from app.git.service import get_recent_commits
 
 
@@ -46,10 +48,6 @@ def test_get_recent_commits(tmp_path):
     assert commits[0]["author"] == "Test User"
     assert len(commits[0]["sha"]) == 40
     assert commits[0]["short_sha"] == commits[0]["sha"][:7]
-
-import pytest
-
-from app.git.service import get_recent_commits
 
 
 def test_get_recent_commits_invalid_repository(tmp_path):

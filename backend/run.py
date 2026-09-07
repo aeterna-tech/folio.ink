@@ -32,4 +32,3 @@ if __name__ == '__main__':
     # внутри собранного приложения, где reloader не нужен и вреден.
     is_dev = os.environ.get('FOLIO_DEV') == '1'
     app.run(debug=is_dev, port=5000)
-    

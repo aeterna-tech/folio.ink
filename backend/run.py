@@ -5,6 +5,7 @@ from app.database import init_db
 from app.routes.projects import projects_bp
 from app.routes.entries import entries_bp
 from app.routes.tags import tags_bp
+from app.routes.git import git_bp
 
 
 def create_app():
@@ -19,6 +20,8 @@ def create_app():
     app.register_blueprint(projects_bp)
     app.register_blueprint(entries_bp)
     app.register_blueprint(tags_bp)
+    app.register_blueprint(git_bp)
+
     return app
 
 

@@ -60,6 +60,29 @@ function StatsIcon(props) {
 	)
 }
 
+function GitIcon(props) {
+	return (
+		<svg
+			xmlns='http://www.w3.org/2000/svg'
+			fill='none'
+			viewBox='0 0 24 24'
+			strokeWidth={1.8}
+			stroke='currentColor'
+			className='w-[18px] h-[18px]'
+			{...props}
+		>
+			<circle cx='6' cy='6' r='2.25' />
+			<circle cx='6' cy='18' r='2.25' />
+			<circle cx='18' cy='9' r='2.25' />
+			<path
+				strokeLinecap='round'
+				strokeLinejoin='round'
+				d='M6 8.25v7.5M6 8.25a5.25 5.25 0 0 0 5.25 5.25H15'
+			/>
+		</svg>
+	)
+}
+
 export default function SideBar({
 	screen,
 	setScreen,
@@ -81,6 +104,13 @@ export default function SideBar({
 			key: 'stats',
 			label: t('nav.stats'),
 			Icon: StatsIcon,
+			disabled: !backendConnected,
+			disabledReason: t('nav.backendRequired'),
+		},
+		{
+			key: 'git',
+			label: t('nav.git'),
+			Icon: GitIcon,
 			disabled: !backendConnected,
 			disabledReason: t('nav.backendRequired'),
 		},

@@ -73,8 +73,8 @@ export default function DigestModal({ project, entries, availableTags, onClose }
 			.replace(/(^-|-$)/g, '')
 	}
 
-	function downloadMarkdown(text, filename) {
-		const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
+	function downloadFile(content, filename, mimeType) {
+		const blob = new Blob([content], { type: mimeType })
 		const url = URL.createObjectURL(blob)
 		const a = document.createElement('a')
 		a.href = url
@@ -93,9 +93,32 @@ export default function DigestModal({ project, entries, availableTags, onClose }
 		// (buildDigestText), просто отдаём его как файл через Blob.
 		// Для выгрузки ВСЕЙ истории проекта без фильтров — см.
 		// handleExportFullHistory ниже, он бьёт в реальный бэкенд-роут.
-		downloadMarkdown(
+		downloadFile(
 			digestText,
 			`${safeFilenamePart(project?.name)}-${preset}-${today}.md`,
+			'text/markdown;charset=utf-8',
+		)
+	}
+
+	function handleExportJson() {
+		// JSON-вариант того же дайджеста — те же отфильтрованные записи
+		// (preset/даты/теги), что уже легли в digestText выше, просто без
+		// markdown-рендеринга. Формируется на фронте, как и handleExport:
+		// бэкенд-роут /export?format=json отдаёт ВСЮ историю проекта без
+		// фильтров (см. handleExportFullHistory), это не то же самое.
+		const payload = {
+			project: project
+				? { id: project.id, name: project.name, description: project.description }
+				: null,
+			preset,
+			dateRange,
+			tags: selectedTags,
+			entries: filteredEntries,
+		}
+		downloadFile(
+			JSON.stringify(payload, null, 2),
+			`${safeFilenamePart(project?.name)}-${preset}-${today}.json`,
+			'application/json',
 		)
 	}
 
@@ -108,9 +131,10 @@ export default function DigestModal({ project, entries, availableTags, onClose }
 		setIsExportingFullHistory(true)
 		try {
 			const markdown = await exportProjectMarkdown(project.id)
-			downloadMarkdown(
+			downloadFile(
 				markdown,
 				`${safeFilenamePart(project?.name)}-full-history-${today}.md`,
+				'text/markdown;charset=utf-8',
 			)
 		} catch (error) {
 			console.error('Не удалось выгрузить полную историю проекта:', error)
@@ -250,6 +274,13 @@ export default function DigestModal({ project, entries, availableTags, onClose }
 						className='flex-1 py-2.5 rounded-md bg-teal-500 hover:bg-teal-400 text-slate-950 text-sm font-semibold transition-colors'
 					>
 						{t('digest.export')}
+					</button>
+					<button
+						type='button'
+						onClick={handleExportJson}
+						className='flex-1 py-2.5 rounded-md border border-teal-700 text-teal-300 text-sm font-semibold hover:bg-teal-950/40 transition-colors'
+					>
+						{t('digest.exportJson')}
 					</button>
 				</div>
 

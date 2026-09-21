@@ -194,3 +194,29 @@ export const exportProjectMarkdown = async projectId => {
 	}
 	return response.text()
 }
+
+// --- Git-интеграция ------------------------------------------------------
+// GET /api/git/commits?path=<repo_path>&limit=<n>  (см. routes/git.py)
+//
+// path — абсолютный путь к локальной папке с git-репозиторием, обычно
+// приходит из нативного диалога выбора папки (Tauri plugin-dialog, см.
+// components/GitRepoPicker.jsx). Бэкенд сам проверяет, что путь ведёт на
+// git-репозиторий (search_parent_directories=True в GitPython), и при
+// ошибке отдаёт 400 с понятным текстом в error.
+export const getGitCommits = async (repoPath, limit = 10) => {
+	const params = new URLSearchParams({ path: repoPath, limit: String(limit) })
+	let response
+	try {
+		response = await fetch(`${BASE_URL}/api/git/commits?${params}`)
+	} catch (error) {
+		throw new Error(
+			`Не удалось достучаться до ${BASE_URL}/api/git/commits. Бэкенд запущен?`,
+			{ cause: error },
+		)
+	}
+	const data = await response.json().catch(() => null)
+	if (!response.ok) {
+		throw new Error(data?.error || `Ошибка ${response.status} при чтении git-репозитория`)
+	}
+	return data.commits
+}

@@ -11,6 +11,7 @@ import './i18n'
 import SideBar from './components/SideBar'
 import ProjectCard from './components/ProjectCard'
 import ProjectNotes from './pages/ProjectNotes'
+import GitRepoScreen from './pages/GitRepoScreen'
 import {
 	getProjects,
 	createProject,
@@ -202,7 +203,9 @@ export default function App() {
 		? 'logs'
 		: location.pathname === '/stats'
 			? 'stats'
-			: 'projects'
+			: location.pathname === '/git'
+				? 'git'
+				: 'projects'
 
 	// SideBar работает с абстракцией "экран", а не с URL напрямую (это её
 	// изначальный, не изменённый интерфейс) — здесь просто транслируем
@@ -210,6 +213,7 @@ export default function App() {
 	function setScreen(key) {
 		if (key === 'projects') navigate('/')
 		else if (key === 'stats') navigate('/stats')
+		else if (key === 'git') navigate('/git')
 		else if (key === 'logs' && activeProjectId)
 			navigate(`/projects/${activeProjectId}`)
 	}
@@ -238,10 +242,14 @@ export default function App() {
 	}, [loadProjects])
 
 	// Если пока грузим (ещё не знаем статус) или бэкенд не подключён,
-	// а пользователь как-то оказался на Stats — уводим на Projects,
-	// чтобы не показывать статистику по данным, не подтверждённым бэкендом.
+	// а пользователь как-то оказался на Stats или Git — уводим на Projects:
+	// для Git это важно так же, как для Stats — экран бьёт в /api/git/commits,
+	// без бэкенда там нечего делать.
 	useEffect(() => {
-		if (location.pathname === '/stats' && !backendConnected) {
+		if (
+			(location.pathname === '/stats' || location.pathname === '/git') &&
+			!backendConnected
+		) {
 			navigate('/', { replace: true })
 		}
 	}, [location.pathname, backendConnected, navigate])
@@ -472,6 +480,21 @@ export default function App() {
 						element={
 							backendConnected ? (
 								<StatsScreen projects={projects} entries={entries} />
+							) : (
+								<div className='h-screen flex items-center justify-center px-8'>
+									<p className='text-slate-600 text-sm text-center max-w-sm'>
+										{t('stats.backendRequired')}
+									</p>
+								</div>
+							)
+						}
+					/>
+
+					<Route
+						path='/git'
+						element={
+							backendConnected ? (
+								<GitRepoScreen />
 							) : (
 								<div className='h-screen flex items-center justify-center px-8'>
 									<p className='text-slate-600 text-sm text-center max-w-sm'>

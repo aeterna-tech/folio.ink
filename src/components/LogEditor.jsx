@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 function escapeHtml(str) {
@@ -314,15 +314,19 @@ function TagPicker({ value, onChange, suggestions, placeholder }) {
 	)
 }
 
-export default function LogEditor({
-	activeProject,
-	projectEntries,
-	isSaving,
-	onSaveEntry,
-	onUpdateEntry,
-	onDeleteEntry,
-	existingTags = [],
-}) {
+export default forwardRef(function LogEditor(
+	{
+		activeProject,
+		projectEntries,
+		isSaving,
+		onSaveEntry,
+		onUpdateEntry,
+		onDeleteEntry,
+		existingTags = [],
+		headerActions,
+	},
+	ref,
+) {
 	const { t, i18n } = useTranslation()
 	const dateLocale = i18n.language?.startsWith('ru') ? 'ru-RU' : 'en-US'
 	const today = toLocalISODate(new Date())
@@ -330,9 +334,26 @@ export default function LogEditor({
 	const [duration, setDuration] = useState('')
 	const [tags, setTags] = useState([])
 	const [text, setText] = useState('')
+	const [whereStopped, setWhereStopped] = useState('')
 	const [mode, setMode] = useState('edit')
 	const [editingEntryId, setEditingEntryId] = useState(null)
 	const textareaRef = useRef(null)
+	const whereStoppedRef = useRef(null)
+	const formSectionRef = useRef(null)
+
+	// Наружу (ProjectNotes → баннер о простое проекта) отдаём только один
+	// императивный метод — прокрутить к форме и поставить фокус в поле
+	// "где остановился". Сам компонент по-прежнему полностью controlled
+	// изнутри, это не общий escape hatch, а точечный кейс для баннера.
+	useImperativeHandle(ref, () => ({
+		focusForm() {
+			formSectionRef.current?.scrollIntoView({
+				behavior: 'smooth',
+				block: 'start',
+			})
+			whereStoppedRef.current?.focus()
+		},
+	}))
 
 	const sortedEntries = [...projectEntries].sort(
 		(a, b) => new Date(b.date) - new Date(a.date),
@@ -388,6 +409,7 @@ export default function LogEditor({
 		setDuration('')
 		setTags([])
 		setText('')
+		setWhereStopped('')
 		setMode('edit')
 		setEditingEntryId(null)
 	}
@@ -398,6 +420,7 @@ export default function LogEditor({
 		setDuration(String(entry.durationMinutes ?? ''))
 		setTags(entry.tags || [])
 		setText(entry.text || '')
+		setWhereStopped(entry.whereStopped || '')
 		setMode('edit')
 	}
 
@@ -431,6 +454,7 @@ export default function LogEditor({
 				durationMinutes: Number(duration),
 				text: text.trim(),
 				tags: cleanTags,
+				whereStopped: whereStopped.trim(),
 			})
 		} else {
 			result = await onSaveEntry({
@@ -443,6 +467,7 @@ export default function LogEditor({
 				durationMinutes: Number(duration),
 				text: text.trim(),
 				tags: cleanTags,
+				whereStopped: whereStopped.trim(),
 			})
 		}
 
@@ -456,14 +481,21 @@ export default function LogEditor({
 	return (
 		<div className='flex-1 min-h-0 h-full overflow-hidden flex flex-col'>
 			<header className='px-8 py-6 border-b border-slate-800 shrink-0'>
-				<div className='flex items-center gap-2.5'>
-					<span
-						className='w-3 h-3 rounded-full shrink-0'
-						style={{ backgroundColor: activeProject.color }}
-					/>
-					<h2 className='text-xl font-semibold text-slate-100 truncate'>
-						{activeProject.name}
-					</h2>
+				<div className='flex items-center justify-between gap-3'>
+					<div className='flex items-center gap-2.5 min-w-0'>
+						<span
+							className='w-3 h-3 rounded-full shrink-0'
+							style={{ backgroundColor: activeProject.color }}
+						/>
+						<h2 className='text-xl font-semibold text-slate-100 truncate'>
+							{activeProject.name}
+						</h2>
+					</div>
+					{headerActions && (
+						<div className='shrink-0 flex items-center gap-2'>
+							{headerActions}
+						</div>
+					)}
 				</div>
 				{activeProject.description && (
 					<p className='text-sm text-slate-500 mt-1'>
@@ -538,7 +570,7 @@ export default function LogEditor({
 				</div>
 
 				{/* Form */}
-				<div className='overflow-y-auto px-8 py-6'>
+				<div ref={formSectionRef} className='overflow-y-auto px-8 py-6'>
 					{isEditingEntry ? (
 						<div className='flex items-center justify-between gap-3 mb-4 bg-teal-950/20 border border-teal-900/40 rounded-md pl-3 pr-2 py-2'>
 							<span className='flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-teal-400'>
@@ -691,6 +723,20 @@ export default function LogEditor({
 							)}
 						</div>
 
+						<div>
+							<label className='block text-xs text-slate-500 mb-1'>
+								{t('logEditor.whereStoppedLabel')}
+							</label>
+							<textarea
+								ref={whereStoppedRef}
+								value={whereStopped}
+								onChange={e => setWhereStopped(e.target.value)}
+								placeholder={t('logEditor.whereStoppedPlaceholder')}
+								rows={2}
+								className='w-full bg-slate-900 border border-slate-800 rounded-md px-3 py-2 text-sm text-slate-200 leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500'
+							/>
+						</div>
+
 						<button
 							type='submit'
 							disabled={isSaving}
@@ -707,4 +753,4 @@ export default function LogEditor({
 			</div>
 		</div>
 	)
-}
+})

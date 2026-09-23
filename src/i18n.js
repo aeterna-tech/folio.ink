@@ -18,6 +18,7 @@ const resources = {
 				projects: 'Projects',
 				logs: 'Logs',
 				stats: 'Stats',
+				git: 'Git',
 				selectProjectFirst: 'Select a project first',
 				backendRequired: 'Connect the backend to see stats',
 				na: 'n/a',
@@ -75,10 +76,26 @@ const resources = {
 				previewButton: 'Preview',
 				textPlaceholder:
 					'What did you work on? Use **bold**, *italic*, `code`, ```blocks```...',
+				whereStoppedLabel: 'Where I left off',
+				whereStoppedPlaceholder:
+					'e.g., Stopped at refactoring the auth module...',
 				saveButton: 'Save entry',
 				updateButton: 'Save changes',
 				saving: 'Saving…',
 				emptyPreview: 'Nothing to preview yet.',
+			},
+			inactivityBanner: {
+				daysMessage_one:
+					"You haven't updated this project in {{count}} day.",
+				daysMessage_other:
+					"You haven't updated this project in {{count}} days.",
+				weeksMessage_one:
+					"You haven't updated this project in {{count}} week.",
+				weeksMessage_other:
+					"You haven't updated this project in {{count}} weeks.",
+				lastNote: 'Last note: {{note}}',
+				addUpdate: 'Add an update',
+				dismiss: 'Dismiss',
 			},
 			stats: {
 				header: 'Stats',
@@ -143,8 +160,20 @@ const resources = {
 				copy: 'Copy',
 				copied: 'Copied!',
 				export: 'Export .md',
+				exportJson: 'Export .json',
 				exportFullHistory: 'Export entire project history instead',
 				exportingFullHistory: 'Exporting…',
+			},
+			git: {
+				header: 'Git repository',
+				subtitle: 'Pick a local repository folder to inspect its recent commits.',
+				pickFolder: 'Select repository folder…',
+				loading: 'Reading…',
+				recentCommits_one: '{{count}} recent commit',
+				recentCommits_other: '{{count}} recent commits',
+				noCommits: 'No commits found in this repository.',
+				desktopOnly: 'The folder picker is only available in the desktop app.',
+				dialogError: 'Could not open the folder picker.',
 			},
 		},
 	},
@@ -161,6 +190,7 @@ const resources = {
 				projects: 'Проекты',
 				logs: 'Записи',
 				stats: 'Статистика',
+				git: 'Git',
 				selectProjectFirst: 'Сначала выберите проект',
 				backendRequired: 'Подключите бэкенд, чтобы увидеть статистику',
 				na: 'н/д',
@@ -226,10 +256,28 @@ const resources = {
 				previewButton: 'Превью',
 				textPlaceholder:
 					'Чем вы занимались? Используйте **жирный**, *курсив*, `код`, ```блоки```...',
+				whereStoppedLabel: 'Где остановился',
+				whereStoppedPlaceholder:
+					'например: остановился на рефакторинге модуля авторизации...',
 				saveButton: 'Сохранить запись',
 				updateButton: 'Сохранить изменения',
 				saving: 'Сохранение…',
 				emptyPreview: 'Пока нечего показать.',
+			},
+			inactivityBanner: {
+				daysMessage_one: 'Вы не обновляли этот проект уже {{count}} день.',
+				daysMessage_few: 'Вы не обновляли этот проект уже {{count}} дня.',
+				daysMessage_many: 'Вы не обновляли этот проект уже {{count}} дней.',
+				daysMessage_other: 'Вы не обновляли этот проект уже {{count}} дня.',
+				weeksMessage_one: 'Вы не обновляли этот проект уже {{count}} неделю.',
+				weeksMessage_few: 'Вы не обновляли этот проект уже {{count}} недели.',
+				weeksMessage_many:
+					'Вы не обновляли этот проект уже {{count}} недель.',
+				weeksMessage_other:
+					'Вы не обновляли этот проект уже {{count}} недели.',
+				lastNote: 'Последняя заметка: {{note}}',
+				addUpdate: 'Добавить запись',
+				dismiss: 'Скрыть',
 			},
 			stats: {
 				header: 'Статистика',
@@ -281,7 +329,7 @@ const resources = {
 				saving: 'Сохранение…',
 			},
 			digest: {
-				openButton: 'Сгенерировать отчёт',
+				openButton: 'Дайджест',
 				title: 'Генерация отчёта',
 				presets: {
 					standup: 'Стендап',
@@ -298,8 +346,22 @@ const resources = {
 				copy: 'Копировать',
 				copied: 'Скопировано!',
 				export: 'Экспорт .md',
+				exportJson: 'Экспорт .json',
 				exportFullHistory: 'Выгрузить всю историю проекта отдельно',
 				exportingFullHistory: 'Экспортируется…',
+			},
+			git: {
+				header: 'Git-репозиторий',
+				subtitle: 'Выберите папку с локальным репозиторием, чтобы посмотреть последние коммиты.',
+				pickFolder: 'Выбрать папку репозитория…',
+				loading: 'Читаем…',
+				recentCommits_one: '{{count}} последний коммит',
+				recentCommits_few: '{{count}} последних коммита',
+				recentCommits_many: '{{count}} последних коммитов',
+				recentCommits_other: '{{count}} последних коммита',
+				noCommits: 'В этом репозитории не найдено коммитов.',
+				desktopOnly: 'Выбор папки доступен только в десктопном приложении.',
+				dialogError: 'Не удалось открыть диалог выбора папки.',
 			},
 		},
 	},

@@ -106,6 +106,12 @@ function normalizeEntry(raw) {
 		// Entry.to_dict() отдаёт tags как список строк — маппинг не нужен,
 		// только страховка на случай null/undefined.
 		tags: raw.tags ?? [],
+		// "Где остановился" — бэкенду нужно отдавать поле where_stopped в
+		// Entry.to_dict() (сейчас там его может не быть — см. комментарий
+		// у denormalizeEntry). Пока бэк не отдаёт это поле, здесь просто
+		// придёт undefined, и weekEntry.whereStopped останется пустым —
+		// без ошибок, но и без данных.
+		whereStopped: raw.where_stopped ?? '',
 	}
 }
 
@@ -118,6 +124,10 @@ function denormalizeEntry(entry) {
 		// _resolve_tags на бэке ждёт список строк с именами тегов и сам
 		// делает get-or-create по Tag.name — здесь просто прокидываем как есть.
 		tags: entry.tags ?? [],
+		// ВАЖНО: это поле нужно добавить в модель Entry на бэкенде
+		// (колонка where_stopped, nullable) и в Entry.to_dict()/маппинг
+		// в routes/entries.py — здесь только фронтовая часть контракта.
+		where_stopped: entry.whereStopped?.trim() || null,
 	}
 }
 
@@ -193,4 +203,30 @@ export const exportProjectMarkdown = async projectId => {
 		)
 	}
 	return response.text()
+}
+
+// --- Git-интеграция ------------------------------------------------------
+// GET /api/git/commits?path=<repo_path>&limit=<n>  (см. routes/git.py)
+//
+// path — абсолютный путь к локальной папке с git-репозиторием, обычно
+// приходит из нативного диалога выбора папки (Tauri plugin-dialog, см.
+// components/GitRepoPicker.jsx). Бэкенд сам проверяет, что путь ведёт на
+// git-репозиторий (search_parent_directories=True в GitPython), и при
+// ошибке отдаёт 400 с понятным текстом в error.
+export const getGitCommits = async (repoPath, limit = 10) => {
+	const params = new URLSearchParams({ path: repoPath, limit: String(limit) })
+	let response
+	try {
+		response = await fetch(`${BASE_URL}/api/git/commits?${params}`)
+	} catch (error) {
+		throw new Error(
+			`Не удалось достучаться до ${BASE_URL}/api/git/commits. Бэкенд запущен?`,
+			{ cause: error },
+		)
+	}
+	const data = await response.json().catch(() => null)
+	if (!response.ok) {
+		throw new Error(data?.error || `Ошибка ${response.status} при чтении git-репозитория`)
+	}
+	return data.commits
 }

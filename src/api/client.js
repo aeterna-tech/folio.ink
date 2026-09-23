@@ -106,6 +106,12 @@ function normalizeEntry(raw) {
 		// Entry.to_dict() отдаёт tags как список строк — маппинг не нужен,
 		// только страховка на случай null/undefined.
 		tags: raw.tags ?? [],
+		// "Где остановился" — бэкенду нужно отдавать поле where_stopped в
+		// Entry.to_dict() (сейчас там его может не быть — см. комментарий
+		// у denormalizeEntry). Пока бэк не отдаёт это поле, здесь просто
+		// придёт undefined, и weekEntry.whereStopped останется пустым —
+		// без ошибок, но и без данных.
+		whereStopped: raw.where_stopped ?? '',
 	}
 }
 
@@ -118,6 +124,10 @@ function denormalizeEntry(entry) {
 		// _resolve_tags на бэке ждёт список строк с именами тегов и сам
 		// делает get-or-create по Tag.name — здесь просто прокидываем как есть.
 		tags: entry.tags ?? [],
+		// ВАЖНО: это поле нужно добавить в модель Entry на бэкенде
+		// (колонка where_stopped, nullable) и в Entry.to_dict()/маппинг
+		// в routes/entries.py — здесь только фронтовая часть контракта.
+		where_stopped: entry.whereStopped?.trim() || null,
 	}
 }
 

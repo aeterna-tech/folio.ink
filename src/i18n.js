@@ -76,10 +76,26 @@ const resources = {
 				previewButton: 'Preview',
 				textPlaceholder:
 					'What did you work on? Use **bold**, *italic*, `code`, ```blocks```...',
+				whereStoppedLabel: 'Where I left off',
+				whereStoppedPlaceholder:
+					'e.g., Stopped at refactoring the auth module...',
 				saveButton: 'Save entry',
 				updateButton: 'Save changes',
 				saving: 'Saving…',
 				emptyPreview: 'Nothing to preview yet.',
+			},
+			inactivityBanner: {
+				daysMessage_one:
+					"You haven't updated this project in {{count}} day.",
+				daysMessage_other:
+					"You haven't updated this project in {{count}} days.",
+				weeksMessage_one:
+					"You haven't updated this project in {{count}} week.",
+				weeksMessage_other:
+					"You haven't updated this project in {{count}} weeks.",
+				lastNote: 'Last note: {{note}}',
+				addUpdate: 'Add an update',
+				dismiss: 'Dismiss',
 			},
 			stats: {
 				header: 'Stats',
@@ -240,10 +256,28 @@ const resources = {
 				previewButton: 'Превью',
 				textPlaceholder:
 					'Чем вы занимались? Используйте **жирный**, *курсив*, `код`, ```блоки```...',
+				whereStoppedLabel: 'Где остановился',
+				whereStoppedPlaceholder:
+					'например: остановился на рефакторинге модуля авторизации...',
 				saveButton: 'Сохранить запись',
 				updateButton: 'Сохранить изменения',
 				saving: 'Сохранение…',
 				emptyPreview: 'Пока нечего показать.',
+			},
+			inactivityBanner: {
+				daysMessage_one: 'Вы не обновляли этот проект уже {{count}} день.',
+				daysMessage_few: 'Вы не обновляли этот проект уже {{count}} дня.',
+				daysMessage_many: 'Вы не обновляли этот проект уже {{count}} дней.',
+				daysMessage_other: 'Вы не обновляли этот проект уже {{count}} дня.',
+				weeksMessage_one: 'Вы не обновляли этот проект уже {{count}} неделю.',
+				weeksMessage_few: 'Вы не обновляли этот проект уже {{count}} недели.',
+				weeksMessage_many:
+					'Вы не обновляли этот проект уже {{count}} недель.',
+				weeksMessage_other:
+					'Вы не обновляли этот проект уже {{count}} недели.',
+				lastNote: 'Последняя заметка: {{note}}',
+				addUpdate: 'Добавить запись',
+				dismiss: 'Скрыть',
 			},
 			stats: {
 				header: 'Статистика',
